@@ -32,19 +32,6 @@ class DataService {
     }
   }
 
-  String? identifyOpening(List<String> playedMoves) {
-    if (root == null) return null;
-    OpeningNode current = root!;
-    for (String move in playedMoves) {
-      if (current.children.containsKey(move)) {
-        current = current.children[move]!;
-      } else {
-        return null; 
-      }
-    }
-    return current.openingName; 
-  }
-
   // --- UI BRIDGE METHODS ---
 
   OpeningNode? _findNodeByName(OpeningNode node, String name) {
@@ -56,7 +43,6 @@ class DataService {
     return null;
   }
 
-  // Recursive search to find exactly where we are on the board
   OpeningNode? _findNodeByFen(OpeningNode node, String fen) {
     if (node.fen == fen) return node;
     for (var child in node.children.values) {
@@ -74,22 +60,27 @@ class DataService {
     return {
       'name': openingName,
       'fen': targetNode.fen,
-      // We no longer need to map variants here, the dynamic function below handles it!
     };
   }
 
-  // NEW: Gets ONLY the next possible moves based on the current board FEN
+  // Find the official name of the exact position currently on the board
+  String? getOpeningNameByFen(String fen) {
+    if (root == null) return null;
+    OpeningNode? node = _findNodeByFen(root!, fen);
+    return node?.openingName;
+  }
+
   List<Map<String, dynamic>> getNextMovesForUI(String currentFen) {
     if (root == null) return [];
     
     OpeningNode? currentNode = _findNodeByFen(root!, currentFen);
-    if (currentNode == null) return []; // Reached the end of the tree or made an invalid move
+    if (currentNode == null) return []; 
 
     List<Map<String, dynamic>> nextMoves = [];
     currentNode.children.forEach((moveStr, childNode) {
       nextMoves.add({
-        'move': moveStr, // e.g. 'e4'
-        'name': childNode.openingName ?? moveStr, // Show opening name if it exists, otherwise show move
+        'move': moveStr, // The exact algebraic move (e.g., 'Nf3')
+        'name': childNode.openingName ?? 'Varyant: $moveStr', 
         'fen': childNode.fen,
         'isCompleted': false, 
       });

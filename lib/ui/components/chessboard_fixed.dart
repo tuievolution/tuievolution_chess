@@ -4,15 +4,16 @@ import '../../core/theme.dart';
 
 class ChessboardFixed extends StatefulWidget {
   final String fen;
-  final ValueChanged<String>? onPositionChanged; // NEW: The bridge to the UI
+  final ValueChanged<String>? onPositionChanged; 
 
   const ChessboardFixed({super.key, required this.fen, this.onPositionChanged});
 
   @override
-  State<ChessboardFixed> createState() => _ChessboardFixedState();
+  State<ChessboardFixed> createState() => ChessboardFixedState();
 }
 
-class _ChessboardFixedState extends State<ChessboardFixed> {
+// REMOVED the underscore (_) so we can access this state publicly using a GlobalKey
+class ChessboardFixedState extends State<ChessboardFixed> {
   late ChessBoardController controller;
   
   List<String> fenHistory = []; 
@@ -47,10 +48,30 @@ class _ChessboardFixedState extends State<ChessboardFixed> {
         currentIndex++;
         
         setState(() {}); 
-
-        // NEW: Tell the parent screen that the board position changed!
         widget.onPositionChanged?.call(currentFen);
       }
+    });
+  }
+
+  // --- NEW: Allows the left-side UI list to force a move on the board ---
+  void makeMoveFromExternal(String san, String newFen) {
+    if (currentIndex < fenHistory.length - 1) {
+      fenHistory.length = currentIndex + 1;
+      sanHistory.length = currentIndex;
+    }
+    
+    fenHistory.add(newFen);
+    sanHistory.add(san);
+    currentIndex++;
+
+    setState(() {
+      isNavigating = true; 
+      controller.loadFen(newFen); 
+    });
+
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) isNavigating = false;
+      widget.onPositionChanged?.call(newFen); 
     });
   }
 
@@ -62,8 +83,6 @@ class _ChessboardFixedState extends State<ChessboardFixed> {
       currentIndex = newIndex;
       String newFen = fenHistory[currentIndex];
       controller.loadFen(newFen); 
-
-      // NEW: Tell the parent screen we traveled through time!
       widget.onPositionChanged?.call(newFen);
     });
     
@@ -105,6 +124,9 @@ class _ChessboardFixedState extends State<ChessboardFixed> {
     }
     return widgets;
   }
+
+  // Add a helper so the parent screen knows how many half-moves have been played
+  int get currentPlyCount => currentIndex;
 
   @override
   Widget build(BuildContext context) {
