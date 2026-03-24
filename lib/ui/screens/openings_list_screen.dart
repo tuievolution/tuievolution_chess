@@ -2,15 +2,25 @@ import 'package:flutter/material.dart';
 import '../../core/theme.dart';
 import '../components/custom_appbar.dart';
 import 'tree_screen.dart';
-import '../../main.dart'; // Import this to access dataService!
+import '../../main.dart'; // Backend dataService'e erişmek için
 
-class OpeningsListScreen extends StatelessWidget {
+class OpeningsListScreen extends StatefulWidget {
   const OpeningsListScreen({super.key});
 
   @override
+  State<OpeningsListScreen> createState() => _OpeningsListScreenState();
+}
+
+class _OpeningsListScreenState extends State<OpeningsListScreen> {
+  String searchQuery = '';
+
+  @override
   Widget build(BuildContext context) {
-    // 1. Fetch the dynamic list from your backend service
-    final openings = dataService.allAvailableOpenings;
+    // Backend'den tüm verileri al ve arama kutusuna göre anlık olarak filtrele
+    final allOpenings = dataService.allAvailableOpenings;
+    final filteredOpenings = allOpenings
+        .where((opening) => opening.toLowerCase().contains(searchQuery.toLowerCase()))
+        .toList();
 
     return Scaffold(
       appBar: const CustomAppBar(),
@@ -21,14 +31,28 @@ class OpeningsListScreen extends StatelessWidget {
             padding: const EdgeInsets.all(24.0),
             child: Column(
               children: [
-                const TextField(decoration: InputDecoration(hintText: 'Açılış Ara...', prefixIcon: Icon(Icons.search))),
+                // ÇALIŞAN ARAMA KUTUSU
+                TextField(
+                  onChanged: (value) => setState(() => searchQuery = value),
+                  decoration: const InputDecoration(
+                    hintText: 'Tüm Açılışlarda Ara...', 
+                    prefixIcon: Icon(Icons.search)
+                  )
+                ),
                 const SizedBox(height: 20),
+                
+                // SONUÇ SAYISI
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('${filteredOpenings.length} açılış bulundu', style: const TextStyle(color: AppColors.textDark, fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(height: 10),
+
                 Expanded(
-                  // 2. Use ListView.builder for dynamic, scalable lists instead of hardcoding
                   child: ListView.builder(
-                    itemCount: openings.length,
+                    itemCount: filteredOpenings.length,
                     itemBuilder: (context, index) {
-                      return _buildOpeningBox(context, openings[index]);
+                      return _buildOpeningBox(context, filteredOpenings[index]);
                     },
                   ),
                 )
@@ -42,13 +66,23 @@ class OpeningsListScreen extends StatelessWidget {
 
   Widget _buildOpeningBox(BuildContext context, String title) {
     return InkWell(
-      // 3. Pass the title to the TreeScreen so it knows what to load
+      // Seçilen açılışı doğrudan TreeScreen'e gönder
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TreeScreen(openingName: title))),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: AppColors.boxColor, border: Border.all(color: AppColors.border)),
-        child: Text(title, style: const TextStyle(fontSize: 18, color: AppColors.woodBrown, fontWeight: FontWeight.bold)),
+        decoration: BoxDecoration(
+          color: AppColors.boxColor, 
+          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(8) // Biraz modernlik katar
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(child: Text(title, style: const TextStyle(fontSize: 18, color: AppColors.woodBrown, fontWeight: FontWeight.bold))),
+            const Icon(Icons.menu_book, color: AppColors.woodBrown), // Görsel zenginlik
+          ],
+        ),
       ),
     );
   }
