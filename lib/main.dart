@@ -1,16 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart'; // Import dotenv
 
-// Your Dart Future (similar to a JS async Promise) starts the app
+// Import your services
+import 'services/supabase_service.dart';
+import 'services/data_service.dart';
+
+final supabaseService = SupabaseService();
+final dataService = DataService();
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize the Supabase connection
-  // Replace these strings with the URL and Anon Key you copied from Step 1
+  // 1. Load the environment variables
+  await dotenv.load(fileName: ".env");
+
+  // 2. Initialize Supabase using the hidden variables
   await Supabase.initialize(
-    url: 'YOUR_SUPABASE_URL',
-    anonKey: 'YOUR_SUPABASE_ANON_KEY',
+    url: dotenv.env['SUPABASE_URL']!,
+    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
+
+  // 3. Initialize your CSV data pipeline
+  await dataService.loadOpenings();
 
   runApp(const MyApp());
 }
