@@ -7,32 +7,51 @@ class DataService {
   final List<String> allAvailableOpenings = [];
 
   Future<void> loadOpenings(String jsonUrl) async {
-    print("Fetching pre-computed tree from the cloud...");
     try {
       final response = await http.get(Uri.parse(jsonUrl));
       if (response.statusCode == 200) {
         final Map<String, dynamic> jsonData = jsonDecode(response.body);
         root = OpeningNode.fromJson(jsonData);
         _extractOpeningNames(root!);
-        print("Success! Tree loaded into memory instantly.");
-      } else {
-        print("Failed to fetch tree: ${response.statusCode}");
       }
-    } catch (e) {
-      print("Network/Parsing Error: $e");
-    }
+    } catch (e) { print("Error: $e"); }
   }
 
   void _extractOpeningNames(OpeningNode node) {
     if (node.openingName != null && !allAvailableOpenings.contains(node.openingName)) {
       allAvailableOpenings.add(node.openingName!);
     }
-    for (var childNode in node.children.values) {
-      _extractOpeningNames(childNode);
-    }
+    for (var childNode in node.children.values) { _extractOpeningNames(childNode); }
   }
 
-  // --- UI BRIDGE METHODS ---
+  // --- NEW: PATHFINDER LOGIC ---
+  
+  // Finds the list of moves (e.g., ["e4", "e5", "Nf3"...]) to get to a specific opening
+  List<String>? findPathToOpening(OpeningNode current, String targetName, List<String> currentPath) {
+    if (current.openingName == targetName) return currentPath;
+    
+    for (var entry in current.children.entries) {
+      var result = findPathToOpening(entry.value, targetName, [...currentPath, entry.key]);
+      if (result != null) return result;
+    }
+    return null;
+  }
+
+  Map<String, dynamic> getOpeningDataForUI(String openingName) {
+    if (root == null) return {'name': openingName, 'fen': '', 'history': <String>[]};
+    
+    // Get the sequence of moves leading to this opening
+    final history = findPathToOpening(root!, openingName, []) ?? [];
+    
+    // Find the actual node to get the final FEN
+    OpeningNode? targetNode = _findNodeByName(root!, openingName);
+    
+    return {
+      'name': openingName,
+      'fen': targetNode?.fen ?? '',
+      'history': history,
+    };
+  }
 
   OpeningNode? _findNodeByName(OpeningNode node, String name) {
     if (node.openingName == name) return node;
@@ -52,40 +71,18 @@ class DataService {
     return null;
   }
 
-  Map<String, dynamic> getOpeningDataForUI(String openingName) {
-    if (root == null) return {'name': openingName, 'fen': '', 'variants': []};
-    OpeningNode? targetNode = _findNodeByName(root!, openingName);
-    if (targetNode == null) return {'name': openingName, 'fen': root!.fen, 'variants': []};
-
-    return {
-      'name': openingName,
-      'fen': targetNode.fen,
-    };
-  }
-
-  // Find the official name of the exact position currently on the board
-  String? getOpeningNameByFen(String fen) {
-    if (root == null) return null;
-    OpeningNode? node = _findNodeByFen(root!, fen);
-    return node?.openingName;
-  }
-
   List<Map<String, dynamic>> getNextMovesForUI(String currentFen) {
     if (root == null) return [];
-    
     OpeningNode? currentNode = _findNodeByFen(root!, currentFen);
     if (currentNode == null) return []; 
 
-    List<Map<String, dynamic>> nextMoves = [];
-    currentNode.children.forEach((moveStr, childNode) {
-      nextMoves.add({
-        'move': moveStr, // The exact algebraic move (e.g., 'Nf3')
-        'name': childNode.openingName ?? 'Varyant: $moveStr', 
-        'fen': childNode.fen,
-        'isCompleted': false, 
-      });
-    });
-
-    return nextMoves;
+    return currentNode.children.entries.map((e) => {
+      'move': e.key,
+      'name': e.value.openingName ?? 'Varyant: ${e.key}', 
+      'fen': e.value.fen,
+      'isCompleted': false, 
+    }).toList();
   }
+
+  String? getOpeningNameByFen(String fen) => _findNodeByFen(root!, fen)?.openingName;
 }

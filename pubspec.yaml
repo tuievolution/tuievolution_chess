@@ -23,6 +23,7 @@ dependencies:
   supabase_flutter: ^2.4.0  # Veritabanı ve kimlik doğrulama işlemleri için
   flutter_dotenv: ^6.0.0
   http: ^1.2.0
+  stockfish: ^1.6.0
 
 dev_dependencies:
   flutter_test:

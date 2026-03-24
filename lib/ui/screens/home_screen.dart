@@ -46,7 +46,8 @@ class _HomeScreenState extends State<HomeScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               // 1. SOL/ÜST KISIM: Satranç Tahtası
-              const ChessboardFixed(fen: AppConstants.startingFen),
+              // FIX APPLIED HERE: Changed 'fen' to 'startingFen' to match the upgraded chessboard!
+              const ChessboardFixed(startingFen: AppConstants.startingFen),
               
               SizedBox(width: isDesktop ? 40 : 0, height: isDesktop ? 0 : 40),
               
