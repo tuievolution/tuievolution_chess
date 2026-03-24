@@ -57,14 +57,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.1"
-  chess:
-    dependency: "direct main"
-    description:
-      name: chess
-      sha256: "6e5a8222931bfb5cd14a4bb9b030c24e257e23957ec3c533fb0ff74a48984ddb"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.8.1"
   clock:
     dependency: transitive
     description:
@@ -105,14 +97,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.7"
-  csv:
-    dependency: "direct main"
-    description:
-      name: csv
-      sha256: "63ed2871dd6471193dffc52c0e6c76fb86269c00244d244297abbb355c84a86e"
-      url: "https://pub.dev"
-    source: hosted
-    version: "5.1.1"
   cupertino_icons:
     dependency: "direct main"
     description:
@@ -225,7 +209,7 @@ packages:
     source: hosted
     version: "1.0.2"
   http:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: http
       sha256: "87721a4a50b19c7f1d49001e51409bddc46303966ce89a65af4f4e6004896412"

@@ -15,9 +15,9 @@ dependencies:
   
   # --- TUANA'NIN BACKEND PAKETLERİ ---
   supabase_flutter: ^2.4.0  # Veritabanı ve kimlik doğrulama işlemleri için
-  csv: ^5.0.2               # openings.csv dosyasını okuyup ayrıştırmak için
-  chess: 0.8.1             # Hamleleri simüle edip tahtanın anlık FEN kodunu üretmek için
   flutter_dotenv: ^6.0.0
+  http: ^1.2.0
+  
 
 dev_dependencies:
   flutter_test:
