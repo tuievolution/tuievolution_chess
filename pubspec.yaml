@@ -13,11 +13,16 @@ dependencies:
 
   cupertino_icons: ^1.0.8
   
-  # --- TUANA'NIN BACKEND PAKETLERİ ---
+  # --- FRONTEND PAKETLERİ ---
+  flutter_svg: ^2.2.4
+  google_fonts: ^8.0.2
+  graphview: ^1.5.1
+  flutter_chess_board: ^1.0.1
+
+  # --- BACKEND PAKETLERİ ---
   supabase_flutter: ^2.4.0  # Veritabanı ve kimlik doğrulama işlemleri için
   flutter_dotenv: ^6.0.0
   http: ^1.2.0
-
 
 dev_dependencies:
   flutter_test:
