@@ -2,17 +2,21 @@ import 'package:flutter/material.dart';
 import '../../core/theme.dart';
 import '../components/custom_appbar.dart';
 import 'tree_screen.dart';
+import '../../main.dart'; // Import this to access dataService!
 
 class OpeningsListScreen extends StatelessWidget {
   const OpeningsListScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    // 1. Fetch the dynamic list from your backend service
+    final openings = dataService.allAvailableOpenings;
+
     return Scaffold(
       appBar: const CustomAppBar(),
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 600), // Liste çok uzamasın diye web'de ortalanır
+          constraints: const BoxConstraints(maxWidth: 600),
           child: Padding(
             padding: const EdgeInsets.all(24.0),
             child: Column(
@@ -20,12 +24,12 @@ class OpeningsListScreen extends StatelessWidget {
                 const TextField(decoration: InputDecoration(hintText: 'Açılış Ara...', prefixIcon: Icon(Icons.search))),
                 const SizedBox(height: 20),
                 Expanded(
-                  child: ListView(
-                    children: [
-                      _buildOpeningBox(context, 'Ruy Lopez'),
-                      _buildOpeningBox(context, 'Queen\'s Gambit'),
-                      _buildOpeningBox(context, 'Sicilian Defense'),
-                    ],
+                  // 2. Use ListView.builder for dynamic, scalable lists instead of hardcoding
+                  child: ListView.builder(
+                    itemCount: openings.length,
+                    itemBuilder: (context, index) {
+                      return _buildOpeningBox(context, openings[index]);
+                    },
                   ),
                 )
               ],
@@ -38,7 +42,8 @@ class OpeningsListScreen extends StatelessWidget {
 
   Widget _buildOpeningBox(BuildContext context, String title) {
     return InkWell(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TreeScreen())),
+      // 3. Pass the title to the TreeScreen so it knows what to load
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TreeScreen(openingName: title))),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),

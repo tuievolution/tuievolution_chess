@@ -59,4 +59,46 @@ class DataService {
     
     return current.openingName; 
   }
+
+  // --- NEW UI BRIDGE METHODS ADDED BELOW ---
+
+  // Helper to search the JSON tree for a specific opening
+  OpeningNode? _findNodeByName(OpeningNode node, String name) {
+    if (node.openingName == name) return node;
+    for (var child in node.children.values) {
+      var found = _findNodeByName(child, name);
+      if (found != null) return found;
+    }
+    return null;
+  }
+
+  // The Bridge for Evrim's UI: Formats your JSON data into the exact Map structure the UI expects
+  Map<String, dynamic> getOpeningDataForUI(String openingName) {
+    if (root == null) return {'name': openingName, 'fen': '', 'variants': []};
+
+    OpeningNode? targetNode = _findNodeByName(root!, openingName);
+    
+    // Fallback if not found
+    if (targetNode == null) return {'name': openingName, 'fen': root!.fen, 'variants': []};
+
+    List<Map<String, dynamic>> variants = [];
+    int id = 1;
+    
+    // Convert the child nodes (next possible moves) into the UI 'variants' list
+    targetNode.children.forEach((move, childNode) {
+      variants.add({
+        'id': id.toString(),
+        // If the child has a specific opening name, use it. Otherwise, use the chess move (e.g., 'Nf3')
+        'name': childNode.openingName ?? 'Variation: $move', 
+        'isCompleted': false, // TODO: We will connect this to Supabase later!
+      });
+      id++;
+    });
+
+    return {
+      'name': openingName,
+      'fen': targetNode.fen,
+      'variants': variants,
+    };
+  }
 }

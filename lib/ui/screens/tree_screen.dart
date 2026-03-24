@@ -1,28 +1,29 @@
 import 'package:flutter/material.dart';
 import '../../core/theme.dart';
-import '../../core/mock_data.dart';
 import '../components/custom_appbar.dart';
 import '../components/chessboard_fixed.dart';
+import '../../main.dart'; // Import this to access dataService!
 
 class TreeScreen extends StatelessWidget {
-  const TreeScreen({super.key});
+  // 1. Require the openingName in the constructor
+  final String openingName;
+  const TreeScreen({super.key, required this.openingName});
 
   @override
   Widget build(BuildContext context) {
-    final opening = MockData.testOpening;
+    // 2. Fetch the real data from the JSON tree instead of MockData
+    final opening = dataService.getOpeningDataForUI(openingName);
     final variants = opening['variants'] as List;
 
-    // Ekran genişliğini kontrol et (Masaüstü mü, Mobil mi?)
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth > 800;
 
     return Scaffold(
       appBar: const CustomAppBar(),
       body: Center(
-        child: SingleChildScrollView( // Mobilde taşmayı önlemek için kaydırılabilir alan
+        child: SingleChildScrollView( 
           padding: const EdgeInsets.all(24.0),
           child: Flex(
-            // Ekran genişse yan yana (Row), darsa alt alta (Column)
             direction: isDesktop ? Axis.horizontal : Axis.vertical,
             crossAxisAlignment: isDesktop ? CrossAxisAlignment.start : CrossAxisAlignment.center,
             mainAxisAlignment: MainAxisAlignment.center,
@@ -45,7 +46,7 @@ class TreeScreen extends StatelessWidget {
               
               // 2. SAĞ/ALT KISIM: Varyantlar Listesi
               ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: isDesktop ? 400 : 500), // Mobilde daha geniş yayılabilir
+                constraints: BoxConstraints(maxWidth: isDesktop ? 400 : 500), 
                 child: Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(color: AppColors.background, border: Border.all(color: AppColors.border, width: 2)),
@@ -60,7 +61,7 @@ class TreeScreen extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(vertical: 8.0),
                         child: Row(
                           children: [
-                            Expanded( // Yazı uzunsa alt satıra geçmesi için Expanded eklendi
+                            Expanded( 
                               child: Text(
                                 '${v["id"]}. ${v["name"]}', 
                                 style: TextStyle(
@@ -71,7 +72,6 @@ class TreeScreen extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(width: 10),
-                            // Sadece tamamlananlarda (isCompleted == true) yeşil yaprak göster
                             if (v["isCompleted"]) const Icon(Icons.eco, color: AppColors.activeGreen, size: 20)
                           ],
                         ),
