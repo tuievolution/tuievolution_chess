@@ -34,6 +34,33 @@ class ChessboardFixedState extends State<ChessboardFixed> {
     
     // Build the history from the very beginning
     _buildFullHistory();
+
+    // Listen to manual user moves on the board
+    controller.addListener(() {
+      if (isNavigating) return; 
+      
+      String currentFen = controller.getFen();
+      if (currentFen == fenHistory[currentIndex]) return; 
+
+      var sans = controller.getSan().whereType<String>().toList();
+      if (sans.isNotEmpty) {
+        String lastElement = sans.last; 
+        List<String> tokens = lastElement.trim().split(RegExp(r'\s+'));
+        String pureMove = tokens.last.replaceAll(RegExp(r'^\d+\.+'), '');
+
+        if (currentIndex < fenHistory.length - 1) {
+          fenHistory.length = currentIndex + 1;
+          sanHistory.length = currentIndex;
+        }
+        
+        fenHistory.add(currentFen);
+        sanHistory.add(pureMove);
+        currentIndex++;
+        
+        setState(() {}); 
+        widget.onPositionChanged?.call(currentFen); 
+      }
+    });
   }
 
   void _buildFullHistory() {
@@ -83,56 +110,61 @@ class ChessboardFixedState extends State<ChessboardFixed> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        AspectRatio(
-          aspectRatio: 1.0,
-          child: Container(
-            decoration: BoxDecoration(border: Border.all(color: AppColors.border, width: 2)),
-            child: ChessBoard(
-              controller: controller,
-              boardColor: BoardColor.brown,
-              boardOrientation: isWhiteBottom ? PlayerColor.white : PlayerColor.black,
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 500), // FIX: Strict boundary for the AspectRatio
+        child: Column(
+          children: [
+            AspectRatio(
+              aspectRatio: 1.0,
+              child: Container(
+                decoration: BoxDecoration(border: Border.all(color: AppColors.border, width: 2)),
+                child: ChessBoard(
+                  controller: controller,
+                  boardColor: BoardColor.brown,
+                  boardOrientation: isWhiteBottom ? PlayerColor.white : PlayerColor.black,
+                ),
+              ),
             ),
-          ),
-        ),
-        // Navigation Buttons
-        Container(
-          color: AppColors.woodBrown,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              IconButton(icon: const Icon(Icons.flip_camera_android, color: Colors.white), onPressed: () => setState(() => isWhiteBottom = !isWhiteBottom)),
-              IconButton(icon: const Icon(Icons.skip_previous, color: Colors.white), onPressed: () => _navigate(0)),
-              IconButton(icon: const Icon(Icons.navigate_before, color: Colors.white), onPressed: () => _navigate(currentIndex > 0 ? currentIndex - 1 : 0)),
-              IconButton(icon: const Icon(Icons.navigate_next, color: Colors.white), onPressed: () => _navigate(currentIndex < fenHistory.length - 1 ? currentIndex + 1 : currentIndex)),
-              IconButton(icon: const Icon(Icons.skip_next, color: Colors.white), onPressed: () => _navigate(fenHistory.length - 1)),
-            ],
-          ),
-        ),
-        // Notation Panel
-        Container(
-          width: double.infinity, height: 120, padding: const EdgeInsets.all(12),
-          decoration: const BoxDecoration(color: AppColors.background, border: Border(bottom: BorderSide(color: AppColors.border, width: 2))),
-          child: SingleChildScrollView(
-            child: Wrap(
-              children: List.generate(sanHistory.length, (i) {
-                bool isCurrent = (i == currentIndex - 1);
-                return Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (i % 2 == 0) Text('${(i ~/ 2) + 1}. ', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    InkWell(
-                      onTap: () => _navigate(i + 1),
-                      child: Text("${sanHistory[i]} ", style: TextStyle(color: isCurrent ? AppColors.activeGreen : AppColors.textDark, fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal)),
-                    ),
-                  ],
-                );
-              }),
+            // Navigation Buttons
+            Container(
+              color: AppColors.woodBrown,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  IconButton(icon: const Icon(Icons.flip_camera_android, color: Colors.white), onPressed: () => setState(() => isWhiteBottom = !isWhiteBottom)),
+                  IconButton(icon: const Icon(Icons.skip_previous, color: Colors.white), onPressed: () => _navigate(0)),
+                  IconButton(icon: const Icon(Icons.navigate_before, color: Colors.white), onPressed: () => _navigate(currentIndex > 0 ? currentIndex - 1 : 0)),
+                  IconButton(icon: const Icon(Icons.navigate_next, color: Colors.white), onPressed: () => _navigate(currentIndex < fenHistory.length - 1 ? currentIndex + 1 : currentIndex)),
+                  IconButton(icon: const Icon(Icons.skip_next, color: Colors.white), onPressed: () => _navigate(fenHistory.length - 1)),
+                ],
+              ),
             ),
-          ),
+            // Notation Panel
+            Container(
+              width: double.infinity, height: 120, padding: const EdgeInsets.all(12),
+              decoration: const BoxDecoration(color: AppColors.background, border: Border(bottom: BorderSide(color: AppColors.border, width: 2))),
+              child: SingleChildScrollView(
+                child: Wrap(
+                  children: List.generate(sanHistory.length, (i) {
+                    bool isCurrent = (i == currentIndex - 1);
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (i % 2 == 0) Text('${(i ~/ 2) + 1}. ', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        InkWell(
+                          onTap: () => _navigate(i + 1),
+                          child: Text("${sanHistory[i]} ", style: TextStyle(color: isCurrent ? AppColors.activeGreen : AppColors.textDark, fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal)),
+                        ),
+                      ],
+                    );
+                  }),
+                ),
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
