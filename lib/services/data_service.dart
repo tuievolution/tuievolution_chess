@@ -24,12 +24,8 @@ class DataService {
     for (var childNode in node.children.values) { _extractOpeningNames(childNode); }
   }
 
-  // --- NEW: PATHFINDER LOGIC ---
-  
-  // Finds the list of moves (e.g., ["e4", "e5", "Nf3"...]) to get to a specific opening
   List<String>? findPathToOpening(OpeningNode current, String targetName, List<String> currentPath) {
     if (current.openingName == targetName) return currentPath;
-    
     for (var entry in current.children.entries) {
       var result = findPathToOpening(entry.value, targetName, [...currentPath, entry.key]);
       if (result != null) return result;
@@ -39,13 +35,8 @@ class DataService {
 
   Map<String, dynamic> getOpeningDataForUI(String openingName) {
     if (root == null) return {'name': openingName, 'fen': '', 'history': <String>[]};
-    
-    // Get the sequence of moves leading to this opening
     final history = findPathToOpening(root!, openingName, []) ?? [];
-    
-    // Find the actual node to get the final FEN
     OpeningNode? targetNode = _findNodeByName(root!, openingName);
-    
     return {
       'name': openingName,
       'fen': targetNode?.fen ?? '',
@@ -62,8 +53,19 @@ class DataService {
     return null;
   }
 
+  // --- NEW: SMART FEN NORMALIZATION ---
+  // Sadece tahtadaki taşları, sırayı ve rok haklarını karşılaştırır. 
+  // Hamle sayılarını ve en-passant detaylarını yoksayarak eşleşme oranını %100'e çıkarır.
+  String _normalizeFen(String fen) {
+    final parts = fen.split(' ');
+    if (parts.length >= 3) {
+      return "${parts[0]} ${parts[1]} ${parts[2]}"; 
+    }
+    return fen;
+  }
+
   OpeningNode? _findNodeByFen(OpeningNode node, String fen) {
-    if (node.fen == fen) return node;
+    if (_normalizeFen(node.fen) == _normalizeFen(fen)) return node;
     for (var child in node.children.values) {
       var found = _findNodeByFen(child, fen);
       if (found != null) return found;

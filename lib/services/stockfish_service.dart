@@ -1,45 +1,31 @@
-import 'dart:async';
-import 'package:stockfish/stockfish.dart';
+// CONDITIONAL IMPORT MAGIC:
+// If the device supports 'dart:ffi' (Windows, Android, iOS), use the native file.
+// If it does not (Web), use the unsupported stub.
+import 'stockfish_unsupported.dart'
+    if (dart.library.ffi) 'stockfish_native.dart';
 
 class StockfishService {
-  Stockfish? _engine;
-  StreamSubscription? _stdoutSub;
-  
-  // Bu callback, Stockfish bir hamle bulduğunda UI'a haber vermek için kullanılır
-  Function(String)? onBestMoveFound;
+  // Instantiate the class from whichever file was conditionally imported above
+  final StockfishPlatformService _platformService = StockfishPlatformService();
 
-  void initEngine() {
-    print("Stockfish Engine Initialize Ediliyor...");
-    _engine = Stockfish();
-    
-    // Motorun çıktılarını dinliyoruz
-    _stdoutSub = _engine!.stdout.listen((line) {
-      // Stockfish analizi bitirdiğinde 'bestmove e2e4 ponder e7e5' gibi bir çıktı verir
-      if (line.startsWith('bestmove')) {
-        final parts = line.split(' ');
-        if (parts.length > 1 && onBestMoveFound != null) {
-          final uciMove = parts[1]; // Örn: 'e2e4'
-          if (uciMove != '(none)') {
-            onBestMoveFound!(uciMove);
-          }
-        }
-      }
-    });
+  // Route the callbacks to the underlying platform service
+  set onBestMoveFound(Function(String)? callback) {
+    _platformService.onBestMoveFound = callback;
   }
 
-  // Motora mevcut konumu verip düşünmesini emrediyoruz
+  set onError(Function(String)? callback) {
+    _platformService.onError = callback;
+  }
+
+  void initEngine() {
+    _platformService.initEngine();
+  }
+
   void calculateBestMove(String fen, {int depth = 12}) {
-    if (_engine == null) return;
-    
-    // Önceki aramayı durdur ve yeni FEN'i yükle
-    _engine!.stdin = 'stop';
-    _engine!.stdin = 'position fen $fen';
-    // Belirlenen derinliğe (depth) kadar en iyi hamleyi ara
-    _engine!.stdin = 'go depth $depth';
+    _platformService.calculateBestMove(fen, depth: depth);
   }
 
   void dispose() {
-    _stdoutSub?.cancel();
-    _engine?.dispose();
+    _platformService.dispose();
   }
 }

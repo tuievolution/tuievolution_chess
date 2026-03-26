@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'dart:async'; // NEW: For the timeout
 import '../../core/theme.dart';
-import '../../core/constants.dart'; // REQUIRED: To get AppConstants.startingFen
+import '../../core/constants.dart'; 
 import '../components/custom_appbar.dart';
 import '../components/chessboard_fixed.dart';
 import '../../main.dart'; 
@@ -19,50 +20,72 @@ class _TreeScreenState extends State<TreeScreen> {
   late String initialFen;
   late String currentFen;
   late String originalOpeningName;
-  late List<String> initialHistory; // NEW: Holds the path to the opening
+  late List<String> initialHistory; 
 
-  // Stockfish State variables
   String? engineBestMove;
   bool isEngineThinking = false;
+  Timer? _engineTimeout; // NEW: To stop endless spinning
 
   @override
   void initState() {
     super.initState();
     final openingData = dataService.getOpeningDataForUI(widget.openingName);
-    
     initialFen = openingData['fen'];
     currentFen = initialFen;
     originalOpeningName = openingData['name'];
-    
-    // FETCH THE HISTORY PATH FROM THE DATA SERVICE
     initialHistory = List<String>.from(openingData['history'] ?? []);
 
-    // Stockfish cevabını dinle
+    // 1. Success Listener
     stockfishService.onBestMoveFound = (uciMove) {
       if (mounted) {
+        _engineTimeout?.cancel(); // Cancel timeout if it succeeds
         setState(() {
           engineBestMove = uciMove;
           isEngineThinking = false;
         });
       }
     };
+
+    // 2. Error Listener
+    stockfishService.onError = (errorMsg) {
+      if (mounted) {
+        _engineTimeout?.cancel();
+        setState(() {
+          engineBestMove = errorMsg; // Show error instead of move
+          isEngineThinking = false;
+        });
+      }
+    };
+  }
+
+  @override
+  void dispose() {
+    _engineTimeout?.cancel();
+    super.dispose();
   }
 
   void _onBoardPositionChanged(String newFen) {
     setState(() {
       currentFen = newFen;
-      engineBestMove = null; // Eski motor analizini temizle
+      engineBestMove = null; 
     });
 
-    // 1. JSON Dataset'te bu hamle var mı diye bak
     final nextMoves = dataService.getNextMovesForUI(newFen);
     
-    // 2. Yoksa Stockfish'i uyandır!
     if (nextMoves.isEmpty) {
-      setState(() {
-        isEngineThinking = true;
-      });
+      setState(() => isEngineThinking = true);
       stockfishService.calculateBestMove(newFen);
+
+      // SAFETY NET: If Stockfish hangs, stop spinning after 3 seconds
+      _engineTimeout?.cancel();
+      _engineTimeout = Timer(const Duration(seconds: 3), () {
+        if (mounted && isEngineThinking) {
+          setState(() {
+            isEngineThinking = false;
+            engineBestMove = "Motor yanıt vermiyor. (C++ derleme sorunu olabilir)";
+          });
+        }
+      });
     }
   }
 
@@ -93,7 +116,7 @@ class _TreeScreenState extends State<TreeScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               
-              // 1. SOL KISIM: Tahta ve Başlık 
+              // 1. SOL KISIM
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -105,7 +128,6 @@ class _TreeScreenState extends State<TreeScreen> {
                   ),
                   ChessboardFixed(
                     key: _boardKey, 
-                    // FIX: Pass the starting point and the history to replay!
                     startingFen: AppConstants.startingFen, 
                     initialMoves: initialHistory, 
                     onPositionChanged: _onBoardPositionChanged, 
@@ -115,7 +137,7 @@ class _TreeScreenState extends State<TreeScreen> {
               
               SizedBox(width: isDesktop ? 60 : 0, height: isDesktop ? 0 : 40),
 
-              // 2. SAĞ KISIM: Olası Hamleler veya Stockfish Analizi
+              // 2. SAĞ KISIM
               ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: isDesktop ? 400 : 500), 
                 child: Container(
@@ -130,7 +152,7 @@ class _TreeScreenState extends State<TreeScreen> {
                       ),
                       const Divider(color: AppColors.border, thickness: 2, height: 30),
                       
-                      // DURUM A: Dataset'te hamleler var
+                      // DURUM A: Dataset'te hamleler var (Artık çok daha iyi çalışacak!)
                       if (nextMoves.isNotEmpty)
                         ...nextMoves.map((moveData) => InkWell(
                           onTap: () {
@@ -160,7 +182,7 @@ class _TreeScreenState extends State<TreeScreen> {
                           ),
                         )),
 
-                      // DURUM B: Dataset bitti, Stockfish Düşünüyor
+                      // DURUM B: Stockfish Düşünüyor
                       if (nextMoves.isEmpty && isEngineThinking)
                         const Row(
                           children: [
@@ -170,7 +192,7 @@ class _TreeScreenState extends State<TreeScreen> {
                           ],
                         ),
 
-                      // DURUM C: Stockfish Hamle Buldu
+                      // DURUM C: Stockfish Hamle/Hata Buldu
                       if (nextMoves.isEmpty && !isEngineThinking && engineBestMove != null)
                         Container(
                           padding: const EdgeInsets.all(16),
@@ -187,8 +209,6 @@ class _TreeScreenState extends State<TreeScreen> {
                               ),
                               const SizedBox(height: 10),
                               Text("En iyi devam yolu: $engineBestMove", style: const TextStyle(fontSize: 16, color: Colors.black87)),
-                              const SizedBox(height: 5),
-                              const Text("(Hamleyi tahtada oynayarak devam edebilirsiniz)", style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.black54)),
                             ],
                           ),
                         ),
