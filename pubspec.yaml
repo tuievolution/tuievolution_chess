@@ -24,6 +24,7 @@ dependencies:
   flutter_dotenv: ^6.0.0
   http: ^1.2.0
   stockfish: ^1.6.0
+  chess: ^0.7.0
 
 dev_dependencies:
   flutter_test:
