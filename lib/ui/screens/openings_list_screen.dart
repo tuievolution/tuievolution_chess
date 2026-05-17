@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../core/theme.dart';
-import '../components/custom_appbar.dart';
 import 'tree_screen.dart';
 import '../../main.dart'; // Backend dataService'e erişmek için
 
@@ -23,7 +22,7 @@ class _OpeningsListScreenState extends State<OpeningsListScreen> {
         .toList();
 
     return Scaffold(
-      appBar: const CustomAppBar(),
+      backgroundColor: AppColors.bg(context),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 600),
@@ -34,9 +33,17 @@ class _OpeningsListScreenState extends State<OpeningsListScreen> {
                 // ÇALIŞAN ARAMA KUTUSU
                 TextField(
                   onChanged: (value) => setState(() => searchQuery = value),
-                  decoration: const InputDecoration(
+                  style: TextStyle(color: AppColors.textPrimary(context)),
+                  decoration: InputDecoration(
                     hintText: 'Tüm Açılışlarda Ara...', 
-                    prefixIcon: Icon(Icons.search)
+                    hintStyle: TextStyle(color: AppColors.textSecondary(context)),
+                    prefixIcon: Icon(Icons.search, color: AppColors.textSecondary(context)),
+                    filled: true,
+                    fillColor: AppColors.surface(context),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: AppColors.border(context)),
+                    ),
                   )
                 ),
                 const SizedBox(height: 20),
@@ -44,7 +51,7 @@ class _OpeningsListScreenState extends State<OpeningsListScreen> {
                 // SONUÇ SAYISI
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: Text('${filteredOpenings.length} açılış bulundu', style: const TextStyle(color: AppColors.textDark, fontWeight: FontWeight.bold)),
+                  child: Text('${filteredOpenings.length} açılış bulundu', style: TextStyle(color: AppColors.textSecondary(context), fontWeight: FontWeight.bold)),
                 ),
                 const SizedBox(height: 10),
 
@@ -72,15 +79,15 @@ class _OpeningsListScreenState extends State<OpeningsListScreen> {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.boxColor, 
-          border: Border.all(color: AppColors.border),
+          color: AppColors.surface(context), 
+          border: Border.all(color: AppColors.border(context)),
           borderRadius: BorderRadius.circular(8) // Biraz modernlik katar
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Expanded(child: Text(title, style: const TextStyle(fontSize: 18, color: AppColors.woodBrown, fontWeight: FontWeight.bold))),
-            const Icon(Icons.menu_book, color: AppColors.woodBrown), // Görsel zenginlik
+            Expanded(child: Text(title, style: TextStyle(fontSize: 18, color: AppColors.textPrimary(context), fontWeight: FontWeight.bold))),
+            Icon(Icons.menu_book, color: AppColors.textSecondary(context)), // Görsel zenginlik
           ],
         ),
       ),
