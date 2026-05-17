@@ -5,9 +5,8 @@ import '../core/constants.dart';
 
 class DataService {
   OpeningNode? root; 
-  final Set<String> _uniqueOpenings = {}; // Benzersizlik için Set kullanıyoruz
+  final Set<String> _uniqueOpenings = {}; 
 
-  // Ana açılışlar ve varyantların hepsini barındıran alfabetik liste
   List<String> get allAvailableOpenings => _uniqueOpenings.toList()..sort();
 
   Future<void> loadOpenings(String jsonUrl) async {
@@ -23,7 +22,6 @@ class DataService {
 
   void _extractOpeningNames(OpeningNode node) {
     if (node.openingName != null) {
-      // Hem tam varyant ismini hem de "Ana Açılış" ismini listeye ekle
       _uniqueOpenings.add(node.openingName!);
       _uniqueOpenings.add(node.openingName!.split(',').first.trim());
     }
@@ -39,11 +37,9 @@ class DataService {
     return null;
   }
 
-  // EĞER ANA AÇILIŞ SEÇİLDİYSE BAŞTAN BAŞLATAN MANTIK
   Map<String, dynamic> getOpeningDataForUI(String searchName) {
     if (root == null) return {'name': searchName, 'fen': AppConstants.startingFen, 'history': <String>[]};
     
-    // Önce tam eşleşme (Spesifik varyant) ara
     OpeningNode? targetNode = _findNodeByName(root!, searchName);
     if (targetNode != null) {
       final history = findPathToOpening(root!, searchName, []) ?? [];
@@ -54,7 +50,6 @@ class DataService {
       };
     }
 
-    // Tam eşleşme yoksa (Kullanıcı Ana Açılış seçtiyse), tahtayı sıfırdan başlat
     return {
       'name': searchName,
       'fen': AppConstants.startingFen,
@@ -71,7 +66,8 @@ class DataService {
     return null;
   }
 
-  String _normalizeFen(String fen) {
+  // GÜNCELLENDİ: Diğer sınıfların hamleleri doğrulayabilmesi için Public yapıldı
+  String normalizeFen(String fen) {
     final parts = fen.split(' ');
     if (parts.length >= 3) {
       return "${parts[0]} ${parts[1]} ${parts[2]}"; 
@@ -80,7 +76,7 @@ class DataService {
   }
 
   OpeningNode? _findNodeByFen(OpeningNode node, String fen) {
-    if (_normalizeFen(node.fen) == _normalizeFen(fen)) return node;
+    if (normalizeFen(node.fen) == normalizeFen(fen)) return node;
     for (var child in node.children.values) {
       var found = _findNodeByFen(child, fen);
       if (found != null) return found;

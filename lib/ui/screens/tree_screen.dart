@@ -28,6 +28,7 @@ class _TreeScreenState extends State<TreeScreen> {
 
   bool isPracticeMode = false;
   String practiceColor = 'w'; 
+  String? revealedHint; // YENİ: İpucunu tutmak için
 
   @override
   void initState() {
@@ -69,6 +70,7 @@ class _TreeScreenState extends State<TreeScreen> {
       isPracticeMode = true;
       practiceColor = color;
       engineBestMove = null;
+      revealedHint = null;
     });
 
     if (color == 'b') {
@@ -78,17 +80,27 @@ class _TreeScreenState extends State<TreeScreen> {
     }
   }
 
-  // YENİ: İpucu tuşuna basıldığında veya rakip oynadığında doğrudan tahtaya yansıtma yapar
+  // YENİ: İpucunu Ekranda Göstermek İçin
+  void _revealHint() {
+    int current = _boardKey.currentState?.currentIndex ?? 0;
+    if (current < initialHistory.length) {
+      setState(() {
+        revealedHint = initialHistory[current];
+      });
+    }
+  }
+
   void _playNextPracticeMove() {
     int current = _boardKey.currentState?.currentIndex ?? 0;
     if (current < initialHistory.length) {
       _boardKey.currentState?.playSanMove(initialHistory[current]);
+      setState(() { revealedHint = null; });
     }
   }
 
   void _onWrongMove() {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Hatalı hamle! (Bilemezsen "İpucu Göster"e tıkla)'), backgroundColor: Colors.red),
+      const SnackBar(content: Text('Hatalı hamle! (Bilemezsen İpucu tuşuyla kopya çekebilirsin)'), backgroundColor: Colors.red),
     );
   }
 
@@ -96,6 +108,8 @@ class _TreeScreenState extends State<TreeScreen> {
     int total = _boardKey.currentState?.fenHistory.length ?? 0;
     int current = _boardKey.currentState?.currentIndex ?? 0;
     
+    setState(() { revealedHint = null; }); // Hamle yapıldığında ipucunu temizle
+
     if (current >= total - 1) {
       Future.delayed(const Duration(milliseconds: 500), _showSuccess);
       return;
@@ -104,7 +118,6 @@ class _TreeScreenState extends State<TreeScreen> {
     Future.delayed(const Duration(milliseconds: 600), () {
       _playNextPracticeMove();
       
-      // Rakip oynadıktan sonra kontrol
       current = _boardKey.currentState?.currentIndex ?? 0;
       if (current >= total - 1) {
         Future.delayed(const Duration(milliseconds: 500), _showSuccess);
@@ -143,14 +156,41 @@ class _TreeScreenState extends State<TreeScreen> {
   void _onBoardPositionChanged(String newFen) {
     if (isPracticeMode) return; 
 
+    // SERBEST KEŞİF MODU KESİN KONTROL: Ağaç dışı hamleye izin verilmez
+    if (newFen == currentFen) return;
+
+    final validNextMoves = dataService.getNextMovesForUI(currentFen);
+    bool isValid = false;
+    for (var m in validNextMoves) {
+      if (dataService.normalizeFen(m['fen']) == dataService.normalizeFen(newFen)) {
+        isValid = true; 
+        break;
+      }
+    }
+
+    // Eğer hamle ağaçta yoksa geri al!
+    if (!isValid && validNextMoves.isNotEmpty) {
+      _boardKey.currentState?.undoMove();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bu hamle açılış teorisinde yok! Sadece ağaçtaki hamleler oynanabilir.'), backgroundColor: Colors.red),
+      );
+      return;
+    } else if (!isValid && validNextMoves.isEmpty && newFen != currentFen) {
+      _boardKey.currentState?.undoMove();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Açılış teorisinin sonuna ulaştınız. Geri alarak farklı bir varyant deneyin.'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
     setState(() {
       currentFen = newFen;
       engineBestMove = null; 
     });
 
-    final nextMoves = dataService.getNextMovesForUI(newFen);
+    final nextMovesAfter = dataService.getNextMovesForUI(newFen);
     
-    if (nextMoves.isEmpty) {
+    if (nextMovesAfter.isEmpty) {
       setState(() => isEngineThinking = true);
       stockfishService.calculateBestMove(newFen);
 
@@ -310,15 +350,33 @@ class _TreeScreenState extends State<TreeScreen> {
                               ],
                             ),
                             const Divider(color: Colors.amber),
-                            // YENİ: İpucu Butonu!
-                            SizedBox(
-                              width: double.infinity,
-                              child: TextButton.icon(
-                                onPressed: _playNextPracticeMove,
-                                icon: const Icon(Icons.lightbulb, color: Colors.amber),
-                                label: const Text('İpucu Göster / Oyna', style: TextStyle(color: Colors.amber)),
+                            if (revealedHint == null)
+                              SizedBox(
+                                width: double.infinity,
+                                child: TextButton.icon(
+                                  onPressed: _revealHint,
+                                  icon: const Icon(Icons.lightbulb, color: Colors.amber),
+                                  label: const Text('İpucu İste', style: TextStyle(color: Colors.amber)),
+                                ),
+                              )
+                            else
+                              InkWell(
+                                onTap: _playNextPracticeMove,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.touch_app, color: Colors.amber, size: 16),
+                                      const SizedBox(width: 8),
+                                      Expanded(child: Text("Beklenen Hamle: $revealedHint (Oynamak için tıkla)", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold))),
+                                    ],
+                                  ),
+                                ),
                               ),
-                            )
                           ],
                         ),
                       ),
@@ -441,7 +499,7 @@ class _TreeScreenState extends State<TreeScreen> {
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
                                               Text(engineBestMove ?? '', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 16)),
-                                              Text('Tap to play this suggestion', style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 12)),
+                                              Text('Tıklayarak hamleyi oynayın', style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 12)),
                                             ],
                                           ),
                                         ),

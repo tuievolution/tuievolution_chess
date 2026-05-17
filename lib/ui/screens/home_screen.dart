@@ -38,26 +38,26 @@ class _HomeScreenState extends State<HomeScreen> {
         _engineTimeout?.cancel();
         setState(() {
           engineVariations = variations;
-          isEngineThinking = false;
         });
       }
     };
     
-    // ÇÖZÜLEN KISIM: Arayüz kilitlenmesi burada giderildi!
     stockfishService.onBestMoveFound = (uciMove) {
       if (mounted) {
-         // 1. Motorun düşünme animasyonunu KESİNLİKLE durdur.
          setState(() {
            isEngineThinking = false;
-         });
-
-         // 2. Eğer maç modundaysak ve sıra motordaysa hamleyi fiziksel olarak tahtada oynat.
-         if (isPlayingVsEngine) {
-           String currentTurn = currentFen.split(' ')[1];
-           bool isEngineTurn = (currentTurn == 'w' && userColor == 'b') || (currentTurn == 'b' && userColor == 'w');
-           if (isEngineTurn) {
-              _boardKey.currentState?.playUciMove(uciMove);
+           // Motor info satırlarını atlayıp direkt bestmove verdiyse, listeyi garantiye alıyoruz
+           if (engineVariations.isEmpty && uciMove != '(none)') {
+             engineVariations = [EngineVariation(rank: 1, uciMove: uciMove, score: 'Kritik Hamle')];
            }
+         });
+         
+         String currentTurn = currentFen.split(' ')[1];
+         bool isEngineTurn = (currentTurn == 'w' && userColor == 'b') || (currentTurn == 'b' && userColor == 'w');
+         
+         // Sadece sıra motordaysa otomatik oyna. Sıra bizdeyse ekranda buton olarak kalacak.
+         if (isPlayingVsEngine && isEngineTurn) {
+            _boardKey.currentState?.playUciMove(uciMove);
          }
       }
     };
@@ -308,27 +308,32 @@ class _HomeScreenState extends State<HomeScreen> {
                     Text('Motor devre dışı bırakıldı.', style: TextStyle(color: textSecondary, fontSize: 13))
                   else if (engineVariations.isNotEmpty)
                     Column(
-                      children: engineVariations.map((v) => Padding(
+                      // SADECE TEK HAMLE GÖSTERMEK İÇİN take(1) EKLENDİ
+                      children: engineVariations.take(1).map((v) => Padding(
                         padding: const EdgeInsets.only(bottom: 8.0),
                         child: InkWell(
                           onTap: () {
                             _boardKey.currentState?.playUciMove(v.uciMove);
+                            // Tıklandıktan sonra ipucunu ekrandan kaldır
+                            setState(() {
+                              engineVariations = [];
+                            });
                           },
                           child: Row(
                             children: [
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                 decoration: BoxDecoration(
-                                  color: v.rank == 1 ? AppColors.primary : AppColors.bg(context),
+                                  color: AppColors.primary, // Tek en iyi hamle her zaman birincil renk
                                   borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: AppColors.primary.withValues(alpha: v.rank == 1 ? 1 : 0.3)),
+                                  border: Border.all(color: AppColors.primary),
                                 ),
                                 child: Text(
                                   v.uciMove,
-                                  style: TextStyle(
-                                    color: v.rank == 1 ? const Color(0xFF2A2118) : AppColors.primary,
+                                  style: const TextStyle(
+                                    color: Color(0xFF2A2118),
                                     fontWeight: FontWeight.bold,
-                                    fontSize: v.rank == 1 ? 18 : 14,
+                                    fontSize: 18,
                                   ),
                                 ),
                               ),

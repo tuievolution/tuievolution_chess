@@ -133,7 +133,20 @@ class ChessboardFixedState extends State<ChessboardFixed> {
     if (uciMove.length >= 4 && mounted) {
       String fromSquare = uciMove.substring(0, 2);
       String toSquare = uciMove.substring(2, 4);
-      controller.makeMove(from: fromSquare, to: toSquare);
+      String? promotion = uciMove.length == 5 ? uciMove[4] : null;
+
+      final tempChess = chess_lib.Chess.fromFEN(controller.getFen());
+      bool valid = tempChess.move({
+        'from': fromSquare,
+        'to': toSquare,
+        if (promotion != null) 'promotion': promotion
+      });
+
+      if (valid) {
+        makeMoveFromExternal("${fromSquare}${toSquare}", tempChess.fen);
+      } else {
+        controller.makeMove(from: fromSquare, to: toSquare);
+      }
     }
   }
 
@@ -156,6 +169,16 @@ class ChessboardFixedState extends State<ChessboardFixed> {
       currentIndex--;
       setState(() {});
       widget.onPositionChanged?.call(controller.getFen());
+    }
+  }
+
+  void undoMove() {
+    if (currentIndex > 0) {
+      controller.undoMove();
+      fenHistory.removeLast();
+      sanHistory.removeLast();
+      currentIndex--;
+      setState(() {});
     }
   }
 
@@ -200,6 +223,27 @@ class ChessboardFixedState extends State<ChessboardFixed> {
 
   int get currentPlyCount => currentIndex;
 
+  // SİMETRİK KOORDİNAT YARDIMCILARI
+  Widget _buildLettersRow() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
+      children: List.generate(8, (i) {
+        String file = String.fromCharCode(97 + (widget.isWhiteBottom ? i : 7 - i));
+        return Text(file, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12));
+      }),
+    );
+  }
+
+  Widget _buildNumbersCol() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
+      children: List.generate(8, (i) {
+        int rank = widget.isWhiteBottom ? 8 - i : i + 1;
+        return Text('$rank', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12));
+      }),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Center(
@@ -209,30 +253,31 @@ class ChessboardFixedState extends State<ChessboardFixed> {
           children: [
             AspectRatio(
               aspectRatio: 1.0,
-              // YENİ TASARIM: Koordinatları (harfler ve sayılar) tahtanın DIŞINA alan yapı
+              // YENİ: Koordinatlar artık tahtanın dışında, tamamen simetrik
               child: Container(
-                padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+                padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
-                  color: AppColors.boardDark, // Arka plan bir çerçeve gibi görev yapar
+                  color: AppColors.boardDark,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Column(
                   children: [
+                    // Üst Harfler
+                    SizedBox(
+                      height: 18,
+                      child: Row(
+                        children: [
+                          const SizedBox(width: 18),
+                          Expanded(child: _buildLettersRow()),
+                          const SizedBox(width: 18),
+                        ],
+                      ),
+                    ),
+                    // Orta: Sol Rakamlar + Tahta + Sağ Rakamlar
                     Expanded(
                       child: Row(
                         children: [
-                          // Sol Taraf: Sayılar (1-8)
-                          SizedBox(
-                            width: 16,
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.spaceAround,
-                              children: List.generate(8, (i) {
-                                int rank = widget.isWhiteBottom ? 8 - i : i + 1;
-                                return Text('$rank', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11));
-                              }),
-                            ),
-                          ),
-                          // Sağ Taraf: Tahta
+                          SizedBox(width: 18, child: _buildNumbersCol()),
                           Expanded(
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(4),
@@ -243,24 +288,18 @@ class ChessboardFixedState extends State<ChessboardFixed> {
                               ),
                             ),
                           ),
+                          SizedBox(width: 18, child: _buildNumbersCol()),
                         ],
                       ),
                     ),
-                    // Alt Taraf: Harfler (A-H)
+                    // Alt Harfler
                     SizedBox(
                       height: 18,
                       child: Row(
                         children: [
-                          const SizedBox(width: 16), // Sol taraf sayıların genişliği kadar boşluk
-                          Expanded(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceAround,
-                              children: List.generate(8, (i) {
-                                String file = String.fromCharCode(97 + (widget.isWhiteBottom ? i : 7 - i));
-                                return Text(file, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11));
-                              }),
-                            ),
-                          ),
+                          const SizedBox(width: 18),
+                          Expanded(child: _buildLettersRow()),
+                          const SizedBox(width: 18),
                         ],
                       ),
                     ),
