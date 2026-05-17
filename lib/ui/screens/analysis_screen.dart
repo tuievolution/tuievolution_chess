@@ -18,7 +18,8 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
   final GlobalKey<ChessboardFixedState> _boardKey = GlobalKey<ChessboardFixedState>();
 
   bool isBuilderMode = true; 
-  String selectedPiece = 'P'; // Default select White Pawn
+  String selectedPiece = 'P'; 
+  bool isWhiteTurn = true; // YENİ: Hamle sırasını tutar (w/b)
 
   late List<String> builderBoard;
 
@@ -73,6 +74,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     }
   }
 
+  // YENİDEN YAZILDI: Production Ready FEN Üretici
   String _generateFen() {
     String fen = '';
     for (int rank = 0; rank < 8; rank++) {
@@ -92,8 +94,10 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
       if (emptyCount > 0) fen += emptyCount.toString();
       if (rank < 7) fen += '/';
     }
-    // Simple FEN suffix for analysis start
-    return '$fen w - - 0 1';
+    
+    // w/b durumunu dinamik olarak atıyoruz
+    String turn = isWhiteTurn ? 'w' : 'b';
+    return '$fen $turn - - 0 1';
   }
 
   @override
@@ -282,6 +286,18 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
             IconButton(icon: const Icon(Icons.refresh, color: AppColors.primary), onPressed: _initBuilderBoard, tooltip: "Reset Board"),
           ],
         ),
+        
+        // YENİ EKLENDİ: FEN 'w' veya 'b' seçici toggle
+        SwitchListTile(
+          title: const Text("White to move (Beyazın Sırası)"),
+          value: isWhiteTurn,
+          activeColor: AppColors.primary,
+          onChanged: (val) {
+            setState(() => isWhiteTurn = val);
+          },
+          contentPadding: EdgeInsets.zero,
+        ),
+
         const SizedBox(height: 12),
         AspectRatio(
           aspectRatio: 1.0,
