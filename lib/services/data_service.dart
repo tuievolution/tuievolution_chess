@@ -14,7 +14,7 @@ class DataService {
         root = OpeningNode.fromJson(jsonData);
         _extractOpeningNames(root!);
       }
-    } catch (e) { print("Error: $e"); }
+    } catch (e) { print("Error loading openings: $e"); }
   }
 
   void _extractOpeningNames(OpeningNode node) {
@@ -53,9 +53,6 @@ class DataService {
     return null;
   }
 
-  // --- NEW: SMART FEN NORMALIZATION ---
-  // Sadece tahtadaki taşları, sırayı ve rok haklarını karşılaştırır. 
-  // Hamle sayılarını ve en-passant detaylarını yoksayarak eşleşme oranını %100'e çıkarır.
   String _normalizeFen(String fen) {
     final parts = fen.split(' ');
     if (parts.length >= 3) {
@@ -80,7 +77,7 @@ class DataService {
 
     return currentNode.children.entries.map((e) => {
       'move': e.key,
-      'name': e.value.openingName ?? 'Varyant: ${e.key}', 
+      'name': e.value.openingName ?? 'Variant: ${e.key}', 
       'fen': e.value.fen,
       'isCompleted': false, 
     }).toList();

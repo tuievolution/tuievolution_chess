@@ -18,6 +18,7 @@ class StockfishPlatformService {
   void initEngine() {
     try {
       _engine = Stockfish();
+      
       _stdoutSub = _engine!.stdout.listen((line) {
         if (line.trim() == 'uciok') {
           _engine!.stdin = 'isready';
@@ -45,6 +46,7 @@ class StockfishPlatformService {
           }
         }
       });
+      
       _engine!.stdin = 'uci';
     } catch (e) {
       print("Stockfish Engine Error: $e");
