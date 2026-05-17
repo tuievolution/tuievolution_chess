@@ -18,6 +18,8 @@ class StockfishPlatformService {
   void initEngine() {
     try {
       _engine = Stockfish();
+      
+      // Listen to the engine's stdout (what Stockfish "says")
       _stdoutSub = _engine!.stdout.listen((line) {
         if (line.trim() == 'uciok') {
           _engine!.stdin = 'isready';
@@ -45,12 +47,14 @@ class StockfishPlatformService {
           }
         }
       });
+      
       _engine!.stdin = 'uci';
     } catch (e) {
       print("Stockfish Engine Error: $e");
     }
   }
 
+  // Parses the continuous evaluation info Stockfish spits out while thinking
   void _parseInfoLine(String line) {
     final parts = line.split(' ');
     
