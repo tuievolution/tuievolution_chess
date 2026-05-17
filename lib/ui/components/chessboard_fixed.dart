@@ -6,8 +6,12 @@ import '../../core/theme.dart';
 class ChessboardFixed extends StatefulWidget {
   final String startingFen;
   final List<String> initialMoves;
+  final bool isPracticeMode;
+  final bool startFromBeginning;
   final ValueChanged<String>? onPositionChanged; 
   final ValueChanged<bool>? onEngineToggled;
+  final VoidCallback? onWrongMove;
+  final VoidCallback? onCorrectMove;
   final bool initialEngineState;
   final bool isWhiteBottom; 
 
@@ -15,8 +19,12 @@ class ChessboardFixed extends StatefulWidget {
     super.key, 
     required this.startingFen, 
     this.initialMoves = const [], 
+    this.isPracticeMode = false,
+    this.startFromBeginning = false,
     this.onPositionChanged,
     this.onEngineToggled,
+    this.onWrongMove,
+    this.onCorrectMove,
     this.initialEngineState = false,
     this.isWhiteBottom = true,
   });
@@ -30,7 +38,6 @@ class ChessboardFixedState extends State<ChessboardFixed> {
   List<String> fenHistory = []; 
   List<String> sanHistory = []; 
   int currentIndex = 0;         
-  bool isNavigating = false;    
   late bool isEngineEnabled;
 
   @override
@@ -38,14 +45,27 @@ class ChessboardFixedState extends State<ChessboardFixed> {
     super.initState();
     isEngineEnabled = widget.initialEngineState;
     controller = ChessBoardController();
-    
     _buildFullHistory();
 
     controller.addListener(() {
-      if (isNavigating) return; 
-      
+      if (!mounted) return;
       String currentFen = controller.getFen();
-      if (currentFen == fenHistory[currentIndex]) return; 
+      
+      if (fenHistory.isNotEmpty && currentFen == fenHistory[currentIndex]) return; 
+
+      if (widget.isPracticeMode && currentIndex + 1 < fenHistory.length && currentFen == fenHistory[currentIndex + 1]) {
+        currentIndex++;
+        setState(() {});
+        widget.onCorrectMove?.call(); 
+        widget.onPositionChanged?.call(currentFen);
+        return;
+      }
+
+      if (widget.isPracticeMode) {
+        controller.undoMove(); 
+        widget.onWrongMove?.call();
+        return;
+      }
 
       var sans = controller.getSan().whereType<String>().toList();
       if (sans.isNotEmpty) {
@@ -68,6 +88,16 @@ class ChessboardFixedState extends State<ChessboardFixed> {
     });
   }
 
+  @override
+  void didUpdateWidget(ChessboardFixed oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isPracticeMode != widget.isPracticeMode ||
+        oldWidget.initialMoves != widget.initialMoves ||
+        oldWidget.startFromBeginning != widget.startFromBeginning) {
+      _buildFullHistory();
+    }
+  }
+
   void _buildFullHistory() {
     final chess = chess_lib.Chess();
     fenHistory = [chess.fen];
@@ -75,7 +105,7 @@ class ChessboardFixedState extends State<ChessboardFixed> {
 
     for (var move in widget.initialMoves) {
       bool moved = false;
-      if (move.length >= 4 && !move.contains('x') && !move.contains('+') && !move.contains('-') && !move.contains('O')) {
+      if (move.length >= 4 && !move.contains('x') && !move.contains('+') && !move.contains('-') && !move.contains('O') && !move.contains('N') && !move.contains('B') && !move.contains('R') && !move.contains('Q') && !move.contains('K')) {
         moved = chess.move({
           'from': move.substring(0, 2),
           'to': move.substring(2, 4),
@@ -91,12 +121,15 @@ class ChessboardFixedState extends State<ChessboardFixed> {
       }
     }
 
-    currentIndex = fenHistory.length - 1;
+    if (widget.startFromBeginning || widget.isPracticeMode) {
+      currentIndex = 0;
+    } else {
+      currentIndex = fenHistory.length - 1;
+    }
     controller.loadFen(fenHistory[currentIndex]);
   }
 
-  // MOTOR HAMLESİ İÇİN (UCI Formatı: e2e4)
-  void makeEngineMove(String uciMove) {
+  void playUciMove(String uciMove) {
     if (uciMove.length >= 4 && mounted) {
       String fromSquare = uciMove.substring(0, 2);
       String toSquare = uciMove.substring(2, 4);
@@ -104,47 +137,42 @@ class ChessboardFixedState extends State<ChessboardFixed> {
     }
   }
 
-  // AÇILIŞ ÖĞRETİCİSİ İÇİN (SAN Formatı: Nf3, O-O)
-  bool makeMoveWithSan(String san) {
+  void playSanMove(String san) {
     final tempChess = chess_lib.Chess.fromFEN(controller.getFen());
-    bool valid = tempChess.move(san);
-    if (valid) {
+    if (tempChess.move(san)) {
       var moveHistory = tempChess.history; 
       if (moveHistory.isNotEmpty) {
         var lastState = moveHistory.last; 
-        // DÜZELTME BURADA: lastState.move üzerinden fromAlgebraic ve toAlgebraic değerlerine ulaşıyoruz
         controller.makeMove(from: lastState.move.fromAlgebraic, to: lastState.move.toAlgebraic);
-        return true;
       }
     }
-    return false;
   }
 
-  // KULLANICI YANLIŞ HAMLE YAPTIĞINDA GERİ ALMAK İÇİN
-  void undoMove() {
+  void takebackMove() {
     if (currentIndex > 0) {
-      setState(() => isNavigating = true);
       controller.undoMove();
       fenHistory.removeLast();
       sanHistory.removeLast();
       currentIndex--;
-      Future.delayed(const Duration(milliseconds: 50), () {
-        if (mounted) setState(() => isNavigating = false);
-      });
+      setState(() {});
+      widget.onPositionChanged?.call(controller.getFen());
     }
   }
 
-  // TAHTAYI BAŞA SARMAK İÇİN
+  bool navigateForward() {
+    if (currentIndex < fenHistory.length - 1) {
+      _navigate(currentIndex + 1);
+      return true;
+    }
+    return false;
+  }
+
   void resetBoard() {
     setState(() {
-      isNavigating = true;
       controller.resetBoard();
       fenHistory = [widget.startingFen];
       sanHistory = [];
       currentIndex = 0;
-    });
-    Future.delayed(const Duration(milliseconds: 50), () {
-      if (mounted) setState(() => isNavigating = false);
     });
   }
 
@@ -156,22 +184,18 @@ class ChessboardFixedState extends State<ChessboardFixed> {
     fenHistory.add(newFen);
     sanHistory.add(san);
     currentIndex++;
-    setState(() { isNavigating = true; controller.loadFen(newFen); });
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (mounted) isNavigating = false;
-      widget.onPositionChanged?.call(newFen); 
-    });
+    controller.loadFen(newFen);
+    setState(() {});
+    widget.onPositionChanged?.call(newFen); 
   }
 
   void _navigate(int newIndex) {
     if (newIndex == currentIndex) return;
     setState(() {
-      isNavigating = true; 
       currentIndex = newIndex;
       controller.loadFen(fenHistory[currentIndex]); 
       widget.onPositionChanged?.call(fenHistory[currentIndex]);
     });
-    Future.delayed(const Duration(milliseconds: 100), () { if (mounted) isNavigating = false; });
   }
 
   int get currentPlyCount => currentIndex;
@@ -185,16 +209,62 @@ class ChessboardFixedState extends State<ChessboardFixed> {
           children: [
             AspectRatio(
               aspectRatio: 1.0,
+              // YENİ TASARIM: Koordinatları (harfler ve sayılar) tahtanın DIŞINA alan yapı
               child: Container(
-                clipBehavior: Clip.hardEdge,
+                padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
                 decoration: BoxDecoration(
+                  color: AppColors.boardDark, // Arka plan bir çerçeve gibi görev yapar
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.border(context), width: 2),
                 ),
-                child: ChessBoard(
-                  controller: controller,
-                  boardColor: BoardColor.brown,
-                  boardOrientation: widget.isWhiteBottom ? PlayerColor.white : PlayerColor.black,
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: Row(
+                        children: [
+                          // Sol Taraf: Sayılar (1-8)
+                          SizedBox(
+                            width: 16,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: List.generate(8, (i) {
+                                int rank = widget.isWhiteBottom ? 8 - i : i + 1;
+                                return Text('$rank', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11));
+                              }),
+                            ),
+                          ),
+                          // Sağ Taraf: Tahta
+                          Expanded(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: ChessBoard(
+                                controller: controller,
+                                boardColor: BoardColor.brown,
+                                boardOrientation: widget.isWhiteBottom ? PlayerColor.white : PlayerColor.black,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Alt Taraf: Harfler (A-H)
+                    SizedBox(
+                      height: 18,
+                      child: Row(
+                        children: [
+                          const SizedBox(width: 16), // Sol taraf sayıların genişliği kadar boşluk
+                          Expanded(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: List.generate(8, (i) {
+                                String file = String.fromCharCode(97 + (widget.isWhiteBottom ? i : 7 - i));
+                                return Text(file, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11));
+                              }),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -208,6 +278,12 @@ class ChessboardFixedState extends State<ChessboardFixed> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
+                  IconButton(
+                    icon: const Icon(Icons.undo), 
+                    color: AppColors.primary,
+                    tooltip: '1 Hamle Geri Al',
+                    onPressed: takebackMove,
+                  ),
                   const Spacer(),
                   IconButton(icon: Icon(Icons.skip_previous, color: AppColors.textSecondary(context)), onPressed: () => _navigate(0)),
                   IconButton(icon: Icon(Icons.navigate_before, color: AppColors.textSecondary(context)), onPressed: () => _navigate(currentIndex > 0 ? currentIndex - 1 : 0)),

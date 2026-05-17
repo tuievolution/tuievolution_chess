@@ -26,10 +26,7 @@ class _TreeScreenState extends State<TreeScreen> {
   bool isEngineThinking = false;
   Timer? _engineTimeout;
 
-  // ÖĞRENME MODU DEĞİŞKENLERİ
   bool isPracticeMode = false;
-  int practiceIndex = 0;
-  bool isAppPlaying = false;
   String practiceColor = 'w'; 
 
   @override
@@ -67,36 +64,54 @@ class _TreeScreenState extends State<TreeScreen> {
     super.dispose();
   }
 
-  // ANTRENMAN MODUNU BAŞLAT
   void _startPractice(String color) {
     setState(() {
       isPracticeMode = true;
-      practiceIndex = 0;
       practiceColor = color;
       engineBestMove = null;
     });
-    _boardKey.currentState?.resetBoard();
 
-    // Siyah seçildiyse beyazın (yapay zeka) ilk hamlesini yapmasını sağla
-    if (color == 'b' && initialHistory.isNotEmpty) {
-      Future.delayed(const Duration(milliseconds: 500), _playExpectedMove);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('İlk hamleyi sen yap!'), backgroundColor: AppColors.primaryDark),
-      );
+    if (color == 'b') {
+      Future.delayed(const Duration(milliseconds: 600), () {
+        _playNextPracticeMove();
+      });
     }
   }
 
-  // UYGULAMANIN RAKİP HAMLEYİ OYNAMASI
-  void _playExpectedMove() {
-    if (practiceIndex >= initialHistory.length) return;
-    setState(() => isAppPlaying = true);
-    String expectedSan = initialHistory[practiceIndex];
-    _boardKey.currentState?.makeMoveWithSan(expectedSan);
-    // Hamle yapıldığında _onBoardPositionChanged tetiklenecek ve indexi artıracak.
+  // YENİ: İpucu tuşuna basıldığında veya rakip oynadığında doğrudan tahtaya yansıtma yapar
+  void _playNextPracticeMove() {
+    int current = _boardKey.currentState?.currentIndex ?? 0;
+    if (current < initialHistory.length) {
+      _boardKey.currentState?.playSanMove(initialHistory[current]);
+    }
   }
 
-  // AÇILIŞ ÖĞRENİLDİĞİNDE ÇALIŞIR
+  void _onWrongMove() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Hatalı hamle! (Bilemezsen "İpucu Göster"e tıkla)'), backgroundColor: Colors.red),
+    );
+  }
+
+  void _onCorrectMove() {
+    int total = _boardKey.currentState?.fenHistory.length ?? 0;
+    int current = _boardKey.currentState?.currentIndex ?? 0;
+    
+    if (current >= total - 1) {
+      Future.delayed(const Duration(milliseconds: 500), _showSuccess);
+      return;
+    }
+
+    Future.delayed(const Duration(milliseconds: 600), () {
+      _playNextPracticeMove();
+      
+      // Rakip oynadıktan sonra kontrol
+      current = _boardKey.currentState?.currentIndex ?? 0;
+      if (current >= total - 1) {
+        Future.delayed(const Duration(milliseconds: 500), _showSuccess);
+      }
+    });
+  }
+
   void _showSuccess() {
     showDialog(
       context: context,
@@ -109,7 +124,7 @@ class _TreeScreenState extends State<TreeScreen> {
             Text('Tebrikler!', style: TextStyle(color: AppColors.primary)),
           ],
         ),
-        content: Text('Açılışı başarıyla tamamladınız. İlerlemeniz kaydedildi.', style: TextStyle(color: AppColors.textPrimary(context))),
+        content: Text('Açılışı başarıyla tamamladınız.', style: TextStyle(color: AppColors.textPrimary(context))),
         actions: [
           TextButton(
             onPressed: () {
@@ -125,46 +140,9 @@ class _TreeScreenState extends State<TreeScreen> {
     );
   }
 
-  // OYUN DÖNGÜSÜ: Hem normal motor analizi, hem de antrenman modu doğrulaması
   void _onBoardPositionChanged(String newFen) {
-    if (isPracticeMode) {
-      final sanList = _boardKey.currentState?.sanHistory ?? [];
-      if (sanList.isEmpty) return;
+    if (isPracticeMode) return; 
 
-      String lastSan = sanList.last;
-      String expectedSan = initialHistory[practiceIndex];
-
-      // Uygulama (Rakip) oynadıysa sadece indexi artır
-      if (isAppPlaying) {
-        setState(() {
-          isAppPlaying = false;
-          practiceIndex++;
-        });
-        if (practiceIndex >= initialHistory.length) _showSuccess();
-        return;
-      }
-
-      // Kullanıcı Oynadıysa Doğrula
-      if (lastSan == expectedSan) {
-        // DOĞRU HAMLE!
-        setState(() { practiceIndex++; });
-        if (practiceIndex >= initialHistory.length) {
-          _showSuccess();
-        } else {
-          // Rakip (Uygulama) sıradaki hamleyi oynar
-          Future.delayed(const Duration(milliseconds: 600), _playExpectedMove);
-        }
-      } else {
-        // YANLIŞ HAMLE! Geri al ve uyar.
-        _boardKey.currentState?.undoMove();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Hatalı hamle! Beklenen: $expectedSan'), backgroundColor: Colors.red),
-        );
-      }
-      return; // Öğrenme modundaysak aşağıya inip motoru yorma
-    }
-
-    // NORMAL İNCELEME MODU (Öğrenme modu kapalıysa)
     setState(() {
       currentFen = newFen;
       engineBestMove = null; 
@@ -192,17 +170,18 @@ class _TreeScreenState extends State<TreeScreen> {
   Widget build(BuildContext context) {
     final List<Map<String, dynamic>> nextMoves = dataService.getNextMovesForUI(currentFen);
     int plyCount = _boardKey.currentState?.currentPlyCount ?? 0;
-    String? currentPositionName = dataService.getOpeningNameByFen(currentFen);
     
+    String? currentPositionName = dataService.getOpeningNameByFen(currentFen);
     String displayTitle = originalOpeningName;
-    if (plyCount >= 6 && currentPositionName != null) {
+    if (currentPositionName != null && currentPositionName != originalOpeningName) {
       displayTitle = currentPositionName;
-    } else if (plyCount > 0) {
-      displayTitle = "$originalOpeningName (Variation)";
+    } else if (plyCount > 0 && initialHistory.isEmpty) {
+      displayTitle = "$originalOpeningName (Serbest Keşif)";
     }
 
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth > 800;
+    double progress = (initialHistory.isNotEmpty) ? (plyCount / initialHistory.length) : 0.0;
 
     return Scaffold(
       backgroundColor: AppColors.bg(context),
@@ -232,9 +211,12 @@ class _TreeScreenState extends State<TreeScreen> {
                   ChessboardFixed(
                     key: _boardKey, 
                     startingFen: AppConstants.startingFen, 
-                    // Öğrenme modu aktif değilse tüm açılış adımlarını anında yükle
-                    initialMoves: isPracticeMode ? [] : initialHistory, 
+                    initialMoves: initialHistory, 
+                    isPracticeMode: isPracticeMode,
+                    startFromBeginning: isPracticeMode || initialHistory.isEmpty, 
                     isWhiteBottom: practiceColor == 'w', 
+                    onWrongMove: _onWrongMove,
+                    onCorrectMove: _onCorrectMove,
                     onPositionChanged: _onBoardPositionChanged, 
                   ),
                 ],
@@ -247,9 +229,7 @@ class _TreeScreenState extends State<TreeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    
-                    // ÖĞRENME MODU KONTROLLERİ (YENİ)
-                    if (!isPracticeMode)
+                    if (!isPracticeMode && initialHistory.isNotEmpty)
                       Container(
                         margin: const EdgeInsets.only(bottom: 16),
                         padding: const EdgeInsets.all(16),
@@ -286,6 +266,20 @@ class _TreeScreenState extends State<TreeScreen> {
                             )
                           ],
                         ),
+                      )
+                    else if (!isPracticeMode && initialHistory.isEmpty)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.primary),
+                        ),
+                        child: Text(
+                          'Serbest Keşif Modu: Tahtada hamle yaparak bu ana açılışın varyantlarını keşfedin. Belirli bir varyantı çalışmak için arama menüsünden spesifik bir varyant seçebilirsiniz.',
+                          style: TextStyle(color: AppColors.primaryDark),
+                        ),
                       ),
                       
                     if (isPracticeMode)
@@ -297,19 +291,33 @@ class _TreeScreenState extends State<TreeScreen> {
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: Colors.amber),
                         ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        child: Column(
                           children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text('Eğitim Modu Aktif', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 16)),
-                                Text('İlerleme: ${practiceIndex} / ${initialHistory.length}', style: TextStyle(color: AppColors.textPrimary(context))),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('Eğitim Modu Aktif', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 16)),
+                                    Text('İlerleme: $plyCount / ${initialHistory.length}', style: TextStyle(color: AppColors.textPrimary(context))),
+                                  ],
+                                ),
+                                TextButton(
+                                  onPressed: () => setState(() => isPracticeMode = false),
+                                  child: const Text('Bitir', style: TextStyle(color: Colors.red)),
+                                )
                               ],
                             ),
-                            TextButton(
-                              onPressed: () => setState(() => isPracticeMode = false),
-                              child: const Text('Bitir', style: TextStyle(color: Colors.red)),
+                            const Divider(color: Colors.amber),
+                            // YENİ: İpucu Butonu!
+                            SizedBox(
+                              width: double.infinity,
+                              child: TextButton.icon(
+                                onPressed: _playNextPracticeMove,
+                                icon: const Icon(Icons.lightbulb, color: Colors.amber),
+                                label: const Text('İpucu Göster / Oyna', style: TextStyle(color: Colors.amber)),
+                              ),
                             )
                           ],
                         ),
@@ -328,7 +336,9 @@ class _TreeScreenState extends State<TreeScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Bu açılışın ${initialHistory.length} hamlelik temel teorisini tamamlayarak ustalık kazan.',
+                            initialHistory.isEmpty 
+                              ? 'Kendi açılış yolunuzu çizin.' 
+                              : 'Bu açılışın ${initialHistory.length} hamlelik temel teorisini tamamlayarak ustalık kazan.',
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
                           const SizedBox(height: 24),
@@ -336,11 +346,11 @@ class _TreeScreenState extends State<TreeScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text('MASTERY PROGRESS', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.primary)),
-                              Text('0%', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.textPrimary(context))),
+                              Text('${(progress * 100).toInt()}%', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.textPrimary(context))),
                             ],
                           ),
                           const SizedBox(height: 8),
-                          const GrowProgressBar(progress: 0.0),
+                          GrowProgressBar(progress: progress),
                         ],
                       ),
                     ),
@@ -411,28 +421,33 @@ class _TreeScreenState extends State<TreeScreen> {
                                 ),
                               ),
                               if (!isEngineThinking && engineBestMove != null)
-                                Container(
-                                  padding: const EdgeInsets.all(16),
-                                  decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border(context)))),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                        decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(4)),
-                                        child: Text('1', style: TextStyle(color: AppColors.bg(context), fontWeight: FontWeight.bold)),
-                                      ),
-                                      const SizedBox(width: 16),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(engineBestMove ?? '', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 16)),
-                                            Text('Deep preparation recommended', style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 12)),
-                                          ],
+                                InkWell(
+                                  onTap: () {
+                                    _boardKey.currentState?.playUciMove(engineBestMove!);
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border(context)))),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                          decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(4)),
+                                          child: Text('1', style: TextStyle(color: AppColors.bg(context), fontWeight: FontWeight.bold)),
                                         ),
-                                      ),
-                                      Icon(Icons.chevron_right, color: AppColors.textSecondary(context)),
-                                    ],
+                                        const SizedBox(width: 16),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(engineBestMove ?? '', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 16)),
+                                              Text('Tap to play this suggestion', style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 12)),
+                                            ],
+                                          ),
+                                        ),
+                                        Icon(Icons.touch_app, color: AppColors.textSecondary(context), size: 14),
+                                      ],
+                                    ),
                                   ),
                                 ),
                             ],

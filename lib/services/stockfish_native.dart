@@ -20,9 +20,11 @@ class StockfishPlatformService {
       _engine = Stockfish();
       
       _stdoutSub = _engine!.stdout.listen((line) {
-        if (line.trim() == 'uciok') {
+        print("STOCKFISH_OUT: $line"); 
+
+        if (line.contains('uciok')) {
           _engine!.stdin = 'isready';
-        } else if (line.trim() == 'readyok') {
+        } else if (line.contains('readyok')) {
           _isReady = true;
           if (_pendingFen != null && _pendingDepth != null) {
             _sendCalculation(_pendingFen!, _pendingDepth!);
@@ -47,9 +49,14 @@ class StockfishPlatformService {
         }
       });
       
-      _engine!.stdin = 'uci';
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (_engine != null) {
+          _engine!.stdin = 'uci';
+        }
+      });
+
     } catch (e) {
-      print("Stockfish Engine Error: $e");
+      onError?.call("Motor Başlatılamadı: $e");
     }
   }
 
@@ -106,7 +113,7 @@ class StockfishPlatformService {
 
   void calculateBestMove(String fen, {int depth = 8}) {
     if (_engine == null) {
-      onError?.call("Engine binary missing.");
+      onError?.call("Motor bulunamadı.");
       return;
     }
     _currentVariations.clear();
@@ -116,9 +123,10 @@ class StockfishPlatformService {
       } else {
         _pendingFen = fen;
         _pendingDepth = depth;
+        _engine!.stdin = 'isready'; 
       }
     } catch (e) {
-      onError?.call("Engine crashed.");
+      onError?.call("Motor hesaplama sırasında çöktü.");
     }
   }
 

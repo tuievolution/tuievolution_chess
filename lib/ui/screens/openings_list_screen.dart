@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/theme.dart';
 import 'tree_screen.dart';
-import '../../main.dart'; // Backend dataService'e erişmek için
+import '../../main.dart'; 
 
 class OpeningsListScreen extends StatefulWidget {
   const OpeningsListScreen({super.key});
@@ -15,7 +15,6 @@ class _OpeningsListScreenState extends State<OpeningsListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Backend'den tüm verileri al ve arama kutusuna göre anlık olarak filtrele
     final allOpenings = dataService.allAvailableOpenings;
     final filteredOpenings = allOpenings
         .where((opening) => opening.toLowerCase().contains(searchQuery.toLowerCase()))
@@ -23,6 +22,9 @@ class _OpeningsListScreenState extends State<OpeningsListScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.bg(context),
+      appBar: AppBar(
+        title: const Text('Tüm Açılışlar'),
+      ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 600),
@@ -30,12 +32,11 @@ class _OpeningsListScreenState extends State<OpeningsListScreen> {
             padding: const EdgeInsets.all(24.0),
             child: Column(
               children: [
-                // ÇALIŞAN ARAMA KUTUSU
                 TextField(
                   onChanged: (value) => setState(() => searchQuery = value),
                   style: TextStyle(color: AppColors.textPrimary(context)),
                   decoration: InputDecoration(
-                    hintText: 'Tüm Açılışlarda Ara...', 
+                    hintText: 'Açılış veya Varyant Ara...', 
                     hintStyle: TextStyle(color: AppColors.textSecondary(context)),
                     prefixIcon: Icon(Icons.search, color: AppColors.textSecondary(context)),
                     filled: true,
@@ -48,7 +49,6 @@ class _OpeningsListScreenState extends State<OpeningsListScreen> {
                 ),
                 const SizedBox(height: 20),
                 
-                // SONUÇ SAYISI
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Text('${filteredOpenings.length} açılış bulundu', style: TextStyle(color: AppColors.textSecondary(context), fontWeight: FontWeight.bold)),
@@ -73,7 +73,6 @@ class _OpeningsListScreenState extends State<OpeningsListScreen> {
 
   Widget _buildOpeningBox(BuildContext context, String title) {
     return InkWell(
-      // Seçilen açılışı doğrudan TreeScreen'e gönder
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TreeScreen(openingName: title))),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
@@ -81,13 +80,13 @@ class _OpeningsListScreenState extends State<OpeningsListScreen> {
         decoration: BoxDecoration(
           color: AppColors.surface(context), 
           border: Border.all(color: AppColors.border(context)),
-          borderRadius: BorderRadius.circular(8) // Biraz modernlik katar
+          borderRadius: BorderRadius.circular(8) 
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Expanded(child: Text(title, style: TextStyle(fontSize: 18, color: AppColors.textPrimary(context), fontWeight: FontWeight.bold))),
-            Icon(Icons.menu_book, color: AppColors.textSecondary(context)), // Görsel zenginlik
+            Expanded(child: Text(title, style: TextStyle(fontSize: 16, color: AppColors.textPrimary(context), fontWeight: FontWeight.bold))),
+            Icon(Icons.menu_book, color: AppColors.textSecondary(context)), 
           ],
         ),
       ),

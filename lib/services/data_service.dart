@@ -1,10 +1,14 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/opening_node.dart';
+import '../core/constants.dart';
 
 class DataService {
   OpeningNode? root; 
-  final List<String> allAvailableOpenings = [];
+  final Set<String> _uniqueOpenings = {}; // Benzersizlik için Set kullanıyoruz
+
+  // Ana açılışlar ve varyantların hepsini barındıran alfabetik liste
+  List<String> get allAvailableOpenings => _uniqueOpenings.toList()..sort();
 
   Future<void> loadOpenings(String jsonUrl) async {
     try {
@@ -18,8 +22,10 @@ class DataService {
   }
 
   void _extractOpeningNames(OpeningNode node) {
-    if (node.openingName != null && !allAvailableOpenings.contains(node.openingName)) {
-      allAvailableOpenings.add(node.openingName!);
+    if (node.openingName != null) {
+      // Hem tam varyant ismini hem de "Ana Açılış" ismini listeye ekle
+      _uniqueOpenings.add(node.openingName!);
+      _uniqueOpenings.add(node.openingName!.split(',').first.trim());
     }
     for (var childNode in node.children.values) { _extractOpeningNames(childNode); }
   }
@@ -33,14 +39,26 @@ class DataService {
     return null;
   }
 
-  Map<String, dynamic> getOpeningDataForUI(String openingName) {
-    if (root == null) return {'name': openingName, 'fen': '', 'history': <String>[]};
-    final history = findPathToOpening(root!, openingName, []) ?? [];
-    OpeningNode? targetNode = _findNodeByName(root!, openingName);
+  // EĞER ANA AÇILIŞ SEÇİLDİYSE BAŞTAN BAŞLATAN MANTIK
+  Map<String, dynamic> getOpeningDataForUI(String searchName) {
+    if (root == null) return {'name': searchName, 'fen': AppConstants.startingFen, 'history': <String>[]};
+    
+    // Önce tam eşleşme (Spesifik varyant) ara
+    OpeningNode? targetNode = _findNodeByName(root!, searchName);
+    if (targetNode != null) {
+      final history = findPathToOpening(root!, searchName, []) ?? [];
+      return {
+        'name': searchName,
+        'fen': targetNode.fen,
+        'history': history,
+      };
+    }
+
+    // Tam eşleşme yoksa (Kullanıcı Ana Açılış seçtiyse), tahtayı sıfırdan başlat
     return {
-      'name': openingName,
-      'fen': targetNode?.fen ?? '',
-      'history': history,
+      'name': searchName,
+      'fen': AppConstants.startingFen,
+      'history': <String>[],
     };
   }
 

@@ -22,7 +22,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String currentFen = AppConstants.startingFen;
   bool isEngineEnabled = true;
   bool isPlayingVsEngine = false; 
-  String userColor = 'w'; // 'w' (Beyaz) veya 'b' (Siyah)
+  String userColor = 'w'; 
   
   List<EngineVariation> engineVariations = [];
   bool isEngineThinking = false;
@@ -43,14 +43,21 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     };
     
-    // KUSURSUZ OYUN DÖNGÜSÜ: Motor hamleyi bulduğunda sıranın gerçekten kendisinde olduğunu teyit eder ve oynar.
+    // ÇÖZÜLEN KISIM: Arayüz kilitlenmesi burada giderildi!
     stockfishService.onBestMoveFound = (uciMove) {
-      if (mounted && isPlayingVsEngine) {
-         String currentTurn = currentFen.split(' ')[1];
-         bool isEngineTurn = (currentTurn == 'w' && userColor == 'b') || (currentTurn == 'b' && userColor == 'w');
-         
-         if (isEngineTurn) {
-            _boardKey.currentState?.makeEngineMove(uciMove);
+      if (mounted) {
+         // 1. Motorun düşünme animasyonunu KESİNLİKLE durdur.
+         setState(() {
+           isEngineThinking = false;
+         });
+
+         // 2. Eğer maç modundaysak ve sıra motordaysa hamleyi fiziksel olarak tahtada oynat.
+         if (isPlayingVsEngine) {
+           String currentTurn = currentFen.split(' ')[1];
+           bool isEngineTurn = (currentTurn == 'w' && userColor == 'b') || (currentTurn == 'b' && userColor == 'w');
+           if (isEngineTurn) {
+              _boardKey.currentState?.playUciMove(uciMove);
+           }
          }
       }
     };
@@ -59,6 +66,9 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) {
         _engineTimeout?.cancel();
         setState(() => isEngineThinking = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Yapay Zeka Hatası: $err'), backgroundColor: Colors.red),
+        );
       }
     };
 
@@ -100,12 +110,14 @@ class _HomeScreenState extends State<HomeScreen> {
       engineVariations = [];
     });
     
-    String currentTurn = newFen.split(' ')[1]; // 'w' veya 'b'
+    String currentTurn = newFen.split(' ')[1]; 
     bool isEngineTurn = (currentTurn == 'w' && userColor == 'b') || (currentTurn == 'b' && userColor == 'w');
 
     if (isPlayingVsEngine) {
       if (isEngineTurn) {
         _requestEngineMove(newFen); 
+      } else {
+        stockfishService.stopEngine();
       }
     } else {
       _requestEngineMove(newFen); 
@@ -120,7 +132,6 @@ class _HomeScreenState extends State<HomeScreen> {
       engineVariations = [];
     });
     
-    // Kullanıcı Siyah seçtiyse Stockfish oyunu Beyaz olarak başlatır
     if (isPlayingVsEngine && userColor == 'b') {
       _requestEngineMove(AppConstants.startingFen);
     }
@@ -138,6 +149,9 @@ class _HomeScreenState extends State<HomeScreen> {
         .where((o) => o.toLowerCase().contains(searchQuery.toLowerCase()))
         .take(5)
         .toList();
+
+    String currentTurn = currentFen.split(' ')[1]; 
+    bool isUserTurn = (currentTurn == 'w' && userColor == 'w') || (currentTurn == 'b' && userColor == 'b');
 
     return Scaffold(
       backgroundColor: AppColors.bg(context),
@@ -169,7 +183,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-            // OYUN MODU VE RENK SEÇİCİ
             Container(
               padding: const EdgeInsets.all(12),
               margin: const EdgeInsets.only(bottom: 16),
@@ -253,61 +266,83 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           const Icon(Icons.memory, color: AppColors.primary, size: 18),
                           const SizedBox(width: 8),
-                          Text('Best Move', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 15)),
+                          Text('Engine Evaluation', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 15)),
                         ],
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+                      if (isPlayingVsEngine && isUserTurn)
+                        TextButton.icon(
+                          onPressed: () => _requestEngineMove(currentFen),
+                          icon: const Icon(Icons.lightbulb, color: Colors.amber, size: 16),
+                          label: const Text('İpucu İste', style: TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold)),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            backgroundColor: Colors.amber.withValues(alpha: 0.1),
+                          ),
+                        )
+                      else
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+                          ),
+                          child: const Text('Stockfish 8', style: TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.bold)),
                         ),
-                        child: const Text('Stockfish 8', style: TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.bold)),
-                      ),
                     ],
                   ),
                   const SizedBox(height: 12),
-                  if (isEngineThinking)
+                  if (isPlayingVsEngine && isUserTurn && engineVariations.isEmpty && !isEngineThinking)
+                    Text('Düşünme sırası sizde. Hamle önerisi almak için yukarıdan "İpucu İste" butonuna tıklayabilirsiniz.', style: TextStyle(color: textSecondary, fontSize: 13))
+                  else if (isEngineThinking)
                     Row(
                       children: [
                         const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
                         const SizedBox(width: 10),
-                        Text('Calculating...', style: TextStyle(color: textSecondary, fontSize: 13)),
+                        Text('Stockfish düşünüyor...', style: TextStyle(color: textSecondary, fontSize: 13)),
                       ],
                     )
                   else if (!isEngineEnabled)
-                    Text('Engine is turned off.', style: TextStyle(color: textSecondary, fontSize: 13))
+                    Text('Motor devre dışı bırakıldı.', style: TextStyle(color: textSecondary, fontSize: 13))
                   else if (engineVariations.isNotEmpty)
                     Column(
                       children: engineVariations.map((v) => Padding(
                         padding: const EdgeInsets.only(bottom: 8.0),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: v.rank == 1 ? AppColors.primary : AppColors.bg(context),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: AppColors.primary.withValues(alpha: v.rank == 1 ? 1 : 0.3)),
-                              ),
-                              child: Text(
-                                v.uciMove,
-                                style: TextStyle(
-                                  color: v.rank == 1 ? const Color(0xFF2A2118) : AppColors.primary,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: v.rank == 1 ? 18 : 14,
+                        child: InkWell(
+                          onTap: () {
+                            _boardKey.currentState?.playUciMove(v.uciMove);
+                          },
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: v.rank == 1 ? AppColors.primary : AppColors.bg(context),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: AppColors.primary.withValues(alpha: v.rank == 1 ? 1 : 0.3)),
+                                ),
+                                child: Text(
+                                  v.uciMove,
+                                  style: TextStyle(
+                                    color: v.rank == 1 ? const Color(0xFF2A2118) : AppColors.primary,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: v.rank == 1 ? 18 : 14,
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            Text('Eval: ${v.score}', style: TextStyle(color: textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
-                          ],
+                              const SizedBox(width: 12),
+                              Text('Değerlendirme: ${v.score}', style: TextStyle(color: textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
+                              const Spacer(),
+                              Icon(Icons.touch_app, color: textSecondary, size: 14),
+                            ],
+                          ),
                         ),
                       )).toList(),
                     )
                   else
-                    Text('Make a move to see suggestions', style: TextStyle(color: textSecondary, fontSize: 13)),
+                    Text('Öneri üretmek için tahtada oynayın veya ipucu isteyin.', style: TextStyle(color: textSecondary, fontSize: 13)),
                 ],
               ),
             ),
