@@ -14,6 +14,9 @@ final supabaseService = SupabaseService();
 final dataService = DataService();
 final stockfishService = StockfishService(); // NEW SERVICE
 
+// GLOBAL THEME MODE NOTIFIER
+final themeNotifier = ValueNotifier<ThemeMode>(ThemeMode.dark);
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -39,11 +42,16 @@ class GrowOpeningsApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'GROW OPENINGS',
-      debugShowCheckedModeBanner: false,
-      theme: growOpeningTheme(),
-      home: const SplashScreen(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeNotifier,
+      builder: (_, mode, __) => MaterialApp(
+        title: 'GROW OPENINGS',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme(),
+        darkTheme: AppTheme.darkTheme(),
+        themeMode: mode,
+        home: const SplashScreen(),
+      ),
     );
   }
 }

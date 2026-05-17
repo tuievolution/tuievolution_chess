@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import '../../core/theme.dart';
 import '../../core/constants.dart';
-import '../components/custom_appbar.dart';
+import '../../main.dart';
 import '../components/chessboard_fixed.dart';
-import '../components/left_drawer.dart';
-import '../components/right_drawer.dart';
 import 'tree_screen.dart';
 import 'openings_list_screen.dart';
-import '../../main.dart'; // Backend dataService'e erişmek için
+import '../../services/stockfish_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,96 +16,319 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final GlobalKey<ChessboardFixedState> _boardKey =
+      GlobalKey<ChessboardFixedState>();
+
   String searchQuery = '';
+  String currentFen = AppConstants.startingFen;
+  bool isEngineEnabled = true;
+  List<EngineVariation> engineVariations = [];
+  bool isEngineThinking = false;
+  String? currentOpeningName;
+  Timer? _engineTimeout;
+
+  @override
+  void initState() {
+    super.initState();
+
+    stockfishService.onEngineInfo = (variations) {
+      if (mounted) {
+        _engineTimeout?.cancel();
+        setState(() {
+          engineVariations = variations;
+          isEngineThinking = false;
+        });
+      }
+    };
+    stockfishService.onError = (err) {
+      if (mounted) {
+        _engineTimeout?.cancel();
+        setState(() => isEngineThinking = false);
+      }
+    };
+
+    if (isEngineEnabled) _requestEngineMove(AppConstants.startingFen);
+  }
+
+  @override
+  void dispose() {
+    _engineTimeout?.cancel();
+    super.dispose();
+  }
+
+  void _requestEngineMove(String fen) {
+    if (!isEngineEnabled) {
+      setState(() {
+        isEngineThinking = false;
+        engineVariations = [];
+      });
+      stockfishService.stopEngine();
+      return;
+    }
+    setState(() {
+      isEngineThinking = true;
+      engineVariations = [];
+    });
+    stockfishService.calculateBestMove(fen);
+    _engineTimeout?.cancel();
+    _engineTimeout = Timer(const Duration(seconds: 5), () {
+      if (mounted && isEngineThinking) {
+        setState(() => isEngineThinking = false);
+      }
+    });
+  }
+
+  void _onBoardPositionChanged(String newFen) {
+    setState(() {
+      currentFen = newFen;
+      currentOpeningName = dataService.getOpeningNameByFen(newFen);
+      engineVariations = [];
+    });
+    _requestEngineMove(newFen);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isDesktop = screenWidth > 800;
+    final surfaceColor = AppColors.surface(context);
+    final borderColor = AppColors.border(context);
+    final textPrimary = AppColors.textPrimary(context);
+    final textSecondary = AppColors.textSecondary(context);
 
-    // 1. Backend'den tüm açılışları al ve arama kutusuna göre filtrele
     final allOpenings = dataService.allAvailableOpenings;
     final filteredOpenings = allOpenings
-        .where((opening) => opening.toLowerCase().contains(searchQuery.toLowerCase()))
+        .where((o) => o.toLowerCase().contains(searchQuery.toLowerCase()))
+        .take(5)
         .toList();
 
-    // Ana ekranda çok yer kaplamaması için sadece ilk 4 sonucu gösterelim
-    final topOpenings = filteredOpenings.take(4).toList();
-
     return Scaffold(
-      appBar: const CustomAppBar(),
-      drawer: const LeftDrawer(),
-      endDrawer: const RightDrawer(),
-      body: Center(
-        child: SingleChildScrollView( 
-          padding: const EdgeInsets.all(24.0),
-          child: Flex(
-            direction: isDesktop ? Axis.horizontal : Axis.vertical,
-            crossAxisAlignment: isDesktop ? CrossAxisAlignment.start : CrossAxisAlignment.center,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // 1. SOL/ÜST KISIM: Satranç Tahtası
-              // FIX APPLIED HERE: Changed 'fen' to 'startingFen' to match the upgraded chessboard!
-              const ChessboardFixed(startingFen: AppConstants.startingFen),
-              
-              SizedBox(width: isDesktop ? 40 : 0, height: isDesktop ? 0 : 40),
-              
-              // 2. SAĞ/ALT KISIM: Canlı Arama ve Dinamik Liste
-              ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: isDesktop ? 400 : double.infinity),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+      backgroundColor: AppColors.bg(context),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+
+            // ── Opening Name Banner ──────────────────────────────────
+            if (currentOpeningName != null)
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+                ),
+                child: Row(
                   children: [
-                    // CANLI ARAMA KUTUSU
-                    TextField(
-                      onChanged: (value) => setState(() => searchQuery = value),
-                      decoration: const InputDecoration(
-                        hintText: 'Açılış Ara (Örn: Ruy Lopez)...', 
-                        prefixIcon: Icon(Icons.search)
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    
-                    const Text('Popüler Açılışlar:', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.woodBrown)),
-                    const SizedBox(height: 10),
-
-                    if (topOpenings.isEmpty)
-                      const Text('Eşleşen açılış bulunamadı.', style: TextStyle(color: AppColors.textDark, fontStyle: FontStyle.italic)),
-
-                    // GERÇEK VERİLERLE LİSTE OLUŞTURMA
-                    ...topOpenings.map((openingName) => InkWell(
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TreeScreen(openingName: openingName))),
-                      child: Container(
-                        width: double.infinity,
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(color: AppColors.boxColor, border: Border.all(color: AppColors.border, width: 1)),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(child: Text(openingName, style: const TextStyle(fontSize: 16, color: AppColors.woodBrown, fontWeight: FontWeight.bold))),
-                            const Icon(Icons.arrow_forward_ios, size: 16, color: AppColors.woodBrown),
-                          ],
+                    const Icon(Icons.eco, color: AppColors.primary, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        currentOpeningName!,
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
                         ),
                       ),
-                    )),
-
-                    const SizedBox(height: 10),
-                    
-                    // TÜMÜNÜ GÖR BUTONU
-                    OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 50),
-                        side: const BorderSide(color: AppColors.woodBrown, width: 2)
-                      ),
-                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const OpeningsListScreen())),
-                      child: const Text('Tüm Açılışları Gör', style: TextStyle(color: AppColors.woodBrown, fontSize: 16, fontWeight: FontWeight.bold)),
-                    )
+                    ),
                   ],
                 ),
-              )
-            ],
-          ),
+              ),
+
+            // ── Chess Board ──────────────────────────────────────────
+            ChessboardFixed(
+              key: _boardKey,
+              startingFen: AppConstants.startingFen,
+              initialEngineState: isEngineEnabled,
+              onEngineToggled: (enabled) {
+                setState(() => isEngineEnabled = enabled);
+                _requestEngineMove(currentFen);
+              },
+              onPositionChanged: _onBoardPositionChanged,
+            ),
+
+            const SizedBox(height: 16),
+
+            // ── Stockfish Suggestion Card ────────────────────────────
+            Container(
+              decoration: BoxDecoration(
+                color: surfaceColor,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: borderColor),
+              ),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.memory, color: AppColors.primary, size: 18),
+                          const SizedBox(width: 8),
+                          Text('Best Move', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 15)),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+                        ),
+                        child: const Text('Stockfish 8', style: TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (isEngineThinking)
+                    Row(
+                      children: [
+                        const SizedBox(
+                          width: 14, height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                        ),
+                        const SizedBox(width: 10),
+                        Text('Calculating...', style: TextStyle(color: textSecondary, fontSize: 13)),
+                      ],
+                    )
+                  else if (!isEngineEnabled)
+                    Text('Engine is turned off. Toggle the icon on the board to analyze.', style: TextStyle(color: textSecondary, fontSize: 13))
+                  else if (engineVariations.isNotEmpty)
+                    Column(
+                      children: engineVariations.map((v) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8.0),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: v.rank == 1 ? AppColors.primary : AppColors.bg(context),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: AppColors.primary.withValues(alpha: v.rank == 1 ? 1 : 0.3)),
+                              ),
+                              child: Text(
+                                v.uciMove,
+                                style: TextStyle(
+                                  color: v.rank == 1 ? const Color(0xFF2A2118) : AppColors.primary,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: v.rank == 1 ? 18 : 14,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Text('Eval: ${v.score}', style: TextStyle(color: textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
+                          ],
+                        ),
+                      )).toList(),
+                    )
+                  else
+                    Text('Make a move to see suggestions', style: TextStyle(color: textSecondary, fontSize: 13)),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // ── Search & Opening List ────────────────────────────────
+            TextField(
+              onChanged: (v) => setState(() => searchQuery = v),
+              style: TextStyle(color: textPrimary),
+              decoration: InputDecoration(
+                hintText: 'Search openings...',
+                hintStyle: TextStyle(color: textSecondary),
+                prefixIcon: Icon(Icons.search, color: textSecondary),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            if (filteredOpenings.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text('No openings found', style: TextStyle(color: textSecondary)),
+              ),
+
+            ...filteredOpenings.map((name) => _OpeningTile(
+              name: name,
+              isCompleted: false,
+              borderColor: borderColor,
+              surfaceColor: surfaceColor,
+              textPrimary: textPrimary,
+              textSecondary: textSecondary,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => TreeScreen(openingName: name)),
+              ),
+            )),
+
+            const SizedBox(height: 8),
+
+            TextButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const OpeningsListScreen()),
+              ),
+              child: const Text(
+                'View All Openings →',
+                style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OpeningTile extends StatelessWidget {
+  final String name;
+  final bool isCompleted;
+  final Color borderColor;
+  final Color surfaceColor;
+  final Color textPrimary;
+  final Color textSecondary;
+  final VoidCallback onTap;
+
+  const _OpeningTile({
+    required this.name,
+    required this.isCompleted,
+    required this.borderColor,
+    required this.surfaceColor,
+    required this.textPrimary,
+    required this.textSecondary,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: surfaceColor,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: isCompleted ? AppColors.primary.withValues(alpha: 0.4) : borderColor),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              isCompleted ? Icons.check_circle : Icons.radio_button_unchecked,
+              color: isCompleted ? AppColors.primary : textSecondary,
+              size: 18,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                name,
+                style: TextStyle(color: textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
+              ),
+            ),
+            Icon(Icons.chevron_right, color: textSecondary, size: 18),
+          ],
         ),
       ),
     );

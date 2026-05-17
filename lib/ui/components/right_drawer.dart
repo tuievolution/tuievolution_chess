@@ -8,17 +8,17 @@ class RightDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Drawer(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.bg(context),
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          const UserAccountsDrawerHeader(
-            decoration: BoxDecoration(color: AppColors.boxColor),
-            accountName: Text("Oyuncu 1", style: TextStyle(color: AppColors.woodBrown)),
-            accountEmail: Text("oyuncu@growopenings.com", style: TextStyle(color: AppColors.woodBrown)),
+          UserAccountsDrawerHeader(
+            decoration: BoxDecoration(color: AppColors.surface(context)),
+            accountName: const Text("Oyuncu 1", style: TextStyle(color: AppColors.primary)),
+            accountEmail: const Text("oyuncu@growopenings.com", style: TextStyle(color: AppColors.primary)),
             currentAccountPicture: CircleAvatar(
-              backgroundColor: AppColors.woodBrown, 
-              child: Icon(Icons.person, color: Colors.white)
+              backgroundColor: AppColors.primary, 
+              child: Icon(Icons.person, color: AppColors.bg(context))
             ),
           ),
           ListTile(

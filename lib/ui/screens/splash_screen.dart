@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/theme.dart';
+import '../widgets/grow_button.dart';
 import 'auth_screen.dart';
 
 class SplashScreen extends StatelessWidget {
@@ -8,20 +9,39 @@ class SplashScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center( // Her şeyi ekranın tam ortasına yerleştirir
+      backgroundColor: AppColors.bg(context),
+      body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('GROW OPENINGS', style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: AppColors.textDark)),
-            const SizedBox(height: 50),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.boxColor, 
-                side: const BorderSide(color: AppColors.border),
-                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15) // Butonu büyütür
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppColors.surface(context),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppColors.border(context), width: 2),
               ),
-              onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const AuthScreen())),
-              child: const Text('START', style: TextStyle(color: AppColors.woodBrown, fontSize: 20)),
+              child: const Icon(Icons.eco, color: AppColors.primary, size: 48),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'GROW OPENINGS', 
+              style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 32),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Nurture your chess mastery.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 64),
+            SizedBox(
+              width: 200,
+              child: GrowButton(
+                text: 'START →',
+                type: GrowButtonType.primary,
+                onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const AuthScreen())),
+              ),
             ),
           ],
         ),

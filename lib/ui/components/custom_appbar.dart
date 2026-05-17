@@ -13,7 +13,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
       actions: [
         // Sağ köşedeki profil ikonu (Tıklanınca sağ çekmeceyi açar)
         IconButton(
-          icon: const Icon(Icons.account_circle, size: 32, color: AppColors.woodBrown),
+          icon: const Icon(Icons.account_circle, size: 32, color: AppColors.primary),
           onPressed: () => Scaffold.of(context).openEndDrawer(),
         )
       ],

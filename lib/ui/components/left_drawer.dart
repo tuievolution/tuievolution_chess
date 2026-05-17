@@ -8,16 +8,16 @@ class LeftDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Drawer(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.bg(context),
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          const DrawerHeader(
-            decoration: BoxDecoration(color: AppColors.boxColor),
-            child: Text('Menü', style: TextStyle(color: AppColors.woodBrown, fontSize: 24)),
+          DrawerHeader(
+            decoration: BoxDecoration(color: AppColors.surface(context)),
+            child: const Text('Menü', style: TextStyle(color: AppColors.primary, fontSize: 24)),
           ),
           ListTile(
-            leading: const Icon(Icons.list, color: AppColors.textDark),
+            leading: Icon(Icons.list, color: AppColors.textSecondary(context)),
             title: const Text('Tüm Açılışlar'),
             onTap: () {
               Navigator.pop(context); // Çekmeceyi kapatır

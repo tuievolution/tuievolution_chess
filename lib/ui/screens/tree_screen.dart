@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'dart:async'; // NEW: For the timeout
+import 'dart:async';
 import '../../core/theme.dart';
 import '../../core/constants.dart'; 
-import '../components/custom_appbar.dart';
 import '../components/chessboard_fixed.dart';
 import '../../main.dart'; 
+import '../widgets/grow_card.dart';
+import '../widgets/grow_progress_bar.dart';
 
 class TreeScreen extends StatefulWidget {
   final String openingName;
@@ -24,7 +25,7 @@ class _TreeScreenState extends State<TreeScreen> {
 
   String? engineBestMove;
   bool isEngineThinking = false;
-  Timer? _engineTimeout; // NEW: To stop endless spinning
+  Timer? _engineTimeout;
 
   @override
   void initState() {
@@ -35,10 +36,9 @@ class _TreeScreenState extends State<TreeScreen> {
     originalOpeningName = openingData['name'];
     initialHistory = List<String>.from(openingData['history'] ?? []);
 
-    // 1. Success Listener
     stockfishService.onBestMoveFound = (uciMove) {
       if (mounted) {
-        _engineTimeout?.cancel(); // Cancel timeout if it succeeds
+        _engineTimeout?.cancel();
         setState(() {
           engineBestMove = uciMove;
           isEngineThinking = false;
@@ -46,12 +46,11 @@ class _TreeScreenState extends State<TreeScreen> {
       }
     };
 
-    // 2. Error Listener
     stockfishService.onError = (errorMsg) {
       if (mounted) {
         _engineTimeout?.cancel();
         setState(() {
-          engineBestMove = errorMsg; // Show error instead of move
+          engineBestMove = errorMsg;
           isEngineThinking = false;
         });
       }
@@ -76,13 +75,12 @@ class _TreeScreenState extends State<TreeScreen> {
       setState(() => isEngineThinking = true);
       stockfishService.calculateBestMove(newFen);
 
-      // SAFETY NET: If Stockfish hangs, stop spinning after 3 seconds
       _engineTimeout?.cancel();
       _engineTimeout = Timer(const Duration(seconds: 3), () {
         if (mounted && isEngineThinking) {
           setState(() {
             isEngineThinking = false;
-            engineBestMove = "Motor yanıt vermiyor. (C++ derleme sorunu olabilir)";
+            engineBestMove = "Engine unavailable";
           });
         }
       });
@@ -99,14 +97,14 @@ class _TreeScreenState extends State<TreeScreen> {
     if (plyCount >= 6 && currentPositionName != null) {
       displayTitle = currentPositionName;
     } else if (plyCount > 0) {
-      displayTitle = "$originalOpeningName (Gelişim Aşaması)";
+      displayTitle = "$originalOpeningName (Variation)";
     }
 
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth > 800;
 
     return Scaffold(
-      appBar: const CustomAppBar(),
+      backgroundColor: AppColors.bg(context),
       body: Center(
         child: SingleChildScrollView( 
           padding: const EdgeInsets.all(24.0),
@@ -116,16 +114,15 @@ class _TreeScreenState extends State<TreeScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               
-              // 1. SOL KISIM
+              // 1. LEFT SIDE (Chessboard)
               Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 20),
-                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-                    decoration: BoxDecoration(color: AppColors.boxColor, border: Border.all(color: AppColors.border, width: 2)),
-                    child: Text(displayTitle, style: const TextStyle(fontSize: 20, color: AppColors.woodBrown, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-                  ),
+                  if (isDesktop) ...[
+                    Text('Dashboard / $originalOpeningName', style: Theme.of(context).textTheme.bodyMedium),
+                    const SizedBox(height: 16),
+                  ],
                   ChessboardFixed(
                     key: _boardKey, 
                     startingFen: AppConstants.startingFen, 
@@ -135,85 +132,235 @@ class _TreeScreenState extends State<TreeScreen> {
                 ],
               ),
               
-              SizedBox(width: isDesktop ? 60 : 0, height: isDesktop ? 0 : 40),
+              SizedBox(width: isDesktop ? 32 : 0, height: isDesktop ? 0 : 32),
 
-              // 2. SAĞ KISIM
+              // 2. RIGHT SIDE (Panels)
               ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: isDesktop ? 400 : 500), 
-                child: Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(color: AppColors.background, border: Border.all(color: AppColors.border, width: 2)),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        plyCount == 0 ? 'Ana Devam Yolları:' : 'Sıradaki Hamleler:', 
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.woodBrown)
-                      ),
-                      const Divider(color: AppColors.border, thickness: 2, height: 30),
-                      
-                      // DURUM A: Dataset'te hamleler var (Artık çok daha iyi çalışacak!)
-                      if (nextMoves.isNotEmpty)
-                        ...nextMoves.map((moveData) => InkWell(
-                          onTap: () {
-                            _boardKey.currentState?.makeMoveFromExternal(moveData['move'], moveData['fen']);
-                          },
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: 8.0),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(color: Colors.white54, border: Border.all(color: AppColors.border), borderRadius: BorderRadius.circular(6)),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(color: AppColors.woodBrown, borderRadius: BorderRadius.circular(4)),
-                                  child: Text(moveData['move'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded( 
-                                  child: Text(
-                                    moveData["name"], 
-                                    style: TextStyle(fontSize: 16, color: moveData["isCompleted"] ? AppColors.activeGreen : AppColors.textDark, fontWeight: moveData["isCompleted"] ? FontWeight.bold : FontWeight.w500)
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Mastery Progress Card
+                    GrowCard(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(displayTitle, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 20)),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'The most popular and best-scoring response. It creates an asymmetrical position and leads to complex, sharp play.',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                          const SizedBox(height: 24),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('MASTERY PROGRESS', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.primary)),
+                              Text('68%', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.textPrimary(context))),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          const GrowProgressBar(progress: 0.68),
+                          const SizedBox(height: 24),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.bg(context),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('TOTAL MOVES', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.textSecondary(context), fontSize: 10)),
+                                      const SizedBox(height: 4),
+                                      Text('24', style: Theme.of(context).textTheme.titleLarge),
+                                    ],
                                   ),
                                 ),
-                                if (moveData["isCompleted"]) const Icon(Icons.eco, color: AppColors.activeGreen, size: 20)
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.bg(context),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('VARIATIONS', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.textSecondary(context), fontSize: 10)),
+                                      const SizedBox(height: 4),
+                                      Text('12', style: Theme.of(context).textTheme.titleLarge),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 16),
+                    
+                    // Move Tree / Engine Card
+                    GrowCard(
+                      padding: const EdgeInsets.all(0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('Move Tree', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 16)),
+                                Icon(Icons.settings, color: AppColors.textSecondary(context), size: 16),
                               ],
                             ),
                           ),
-                        )),
-
-                      // DURUM B: Stockfish Düşünüyor
-                      if (nextMoves.isEmpty && isEngineThinking)
-                        const Row(
-                          children: [
-                            CircularProgressIndicator(color: AppColors.woodBrown),
-                            SizedBox(width: 15),
-                            Expanded(child: Text("Veriseti dışına çıkıldı.\nStockfish en iyi hamleyi hesaplıyor...", style: TextStyle(color: AppColors.woodBrown, fontStyle: FontStyle.italic))),
+                          Divider(height: 1, color: AppColors.border(context)),
+                          
+                          // If we have moves in dataset
+                          if (nextMoves.isNotEmpty) ...[
+                            ...nextMoves.map((moveData) {
+                              return InkWell(
+                                onTap: () => _boardKey.currentState?.makeMoveFromExternal(moveData['move'], moveData['fen']),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: moveData["isCompleted"] ? AppColors.primaryDark.withValues(alpha:0.3) : Colors.transparent,
+                                    border: Border(bottom: BorderSide(color: AppColors.border(context))),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      SizedBox(width: 24, child: Text('${plyCount ~/ 2 + 1}', style: TextStyle(color: AppColors.textSecondary(context)))),
+                                      Expanded(
+                                        child: Text(moveData['move'], style: TextStyle(color: moveData["isCompleted"] ? AppColors.primary : AppColors.textPrimary(context), fontWeight: FontWeight.bold)),
+                                      ),
+                                      Expanded(
+                                        child: Text(moveData["name"].split(' ').first, style: TextStyle(color: AppColors.textPrimary(context))),
+                                      ),
+                                      if (moveData["isCompleted"]) const Icon(Icons.check_circle, color: AppColors.primary, size: 16)
+                                      else Icon(Icons.radio_button_unchecked, color: AppColors.textSecondary(context), size: 16),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }),
                           ],
-                        ),
-
-                      // DURUM C: Stockfish Hamle/Hata Buldu
-                      if (nextMoves.isEmpty && !isEngineThinking && engineBestMove != null)
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(color: Colors.blueGrey.shade100, border: Border.all(color: Colors.blueGrey), borderRadius: BorderRadius.circular(8)),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Row(
+                          
+                          // Stockfish Evaluation
+                          if (nextMoves.isEmpty) ...[
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              color: AppColors.bg(context).withValues(alpha:0.5),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Icon(Icons.memory, color: Colors.blueGrey),
-                                  SizedBox(width: 8),
-                                  Text("Stockfish Önerisi", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.memory, color: AppColors.primary, size: 20),
+                                      const SizedBox(width: 8),
+                                      Text('ENGINE ANALYSIS', style: Theme.of(context).textTheme.labelSmall),
+                                    ],
+                                  ),
+                                  if (isEngineThinking)
+                                    const SizedBox(
+                                      width: 16, height: 16,
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                                    )
+                                  else
+                                    Text('+0.4', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.primary, fontSize: 14)),
                                 ],
                               ),
-                              const SizedBox(height: 10),
-                              Text("En iyi devam yolu: $engineBestMove", style: const TextStyle(fontSize: 16, color: Colors.black87)),
-                            ],
+                            ),
+                            if (!isEngineThinking && engineBestMove != null)
+                              InkWell(
+                                onTap: () {
+                                  // Just a visual representation for now. Actual implementation would parse UCI and apply.
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    border: Border(bottom: BorderSide(color: AppColors.border(context))),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.primary,
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text('1', style: TextStyle(color: AppColors.bg(context), fontWeight: FontWeight.bold)),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(engineBestMove ?? '', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 16)),
+                                            Text('Deep preparation recommended', style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 12)),
+                                          ],
+                                        ),
+                                      ),
+                                      Icon(Icons.chevron_right, color: AppColors.textSecondary(context)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                          ],
+                          
+                          // Bottom Input Note
+                          Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    style: TextStyle(color: AppColors.textPrimary(context)),
+                                    decoration: InputDecoration(
+                                      hintText: 'Add engine note...',
+                                      hintStyle: TextStyle(color: AppColors.textSecondary(context)),
+                                      filled: true,
+                                      fillColor: AppColors.bg(context),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(24),
+                                        borderSide: BorderSide.none,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  decoration: const BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: AppColors.primary,
+                                  ),
+                                  child: IconButton(
+                                    icon: Icon(Icons.add, color: AppColors.bg(context)),
+                                    onPressed: () {},
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                    ],
-                  ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
 
