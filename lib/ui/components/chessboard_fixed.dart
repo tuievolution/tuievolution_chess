@@ -40,6 +40,7 @@ class ChessboardFixedState extends State<ChessboardFixed> {
   List<String> sanHistory = []; 
   int currentIndex = 0;         
   late bool isEngineEnabled;
+  bool isInternalMove = false; // Kilitlenmeyi çözen bayrak
 
   @override
   void initState() {
@@ -49,9 +50,9 @@ class ChessboardFixedState extends State<ChessboardFixed> {
     _buildFullHistory();
 
     controller.addListener(() {
-      if (!mounted) return;
-      String currentFen = controller.getFen();
+      if (!mounted || isInternalMove) return;
       
+      String currentFen = controller.getFen();
       if (fenHistory.isNotEmpty && currentFen == fenHistory[currentIndex]) return; 
 
       if (widget.isPracticeMode && currentIndex + 1 < fenHistory.length && currentFen == fenHistory[currentIndex + 1]) {
@@ -110,11 +111,14 @@ class ChessboardFixedState extends State<ChessboardFixed> {
   void _syncGameTrackerToCurrentIndex() {
     gameTracker = chess_lib.Chess.fromFEN(widget.startingFen);
     for (int i = 0; i < currentIndex; i++) {
-      gameTracker.move(sanHistory[i]);
+      if (i < sanHistory.length) {
+         gameTracker.move(sanHistory[i]);
+      }
     }
   }
 
   void _buildFullHistory() {
+    isInternalMove = true;
     gameTracker = chess_lib.Chess.fromFEN(widget.startingFen);
     fenHistory = [gameTracker.fen];
     sanHistory = [];
@@ -144,10 +148,13 @@ class ChessboardFixedState extends State<ChessboardFixed> {
       currentIndex = fenHistory.length - 1;
     }
     controller.loadFen(fenHistory[currentIndex]);
+    isInternalMove = false;
   }
 
+  // RANGE ERROR ÇÖZÜLDÜ: Motor hamlesi tamamen senkronize edildi
   void playUciMove(String uciMove) {
     if (uciMove.length >= 4 && mounted) {
+      isInternalMove = true;
       String fromSquare = uciMove.substring(0, 2);
       String toSquare = uciMove.substring(2, 4);
       String? promotion = uciMove.length == 5 ? uciMove[4] : null;
@@ -161,9 +168,21 @@ class ChessboardFixedState extends State<ChessboardFixed> {
 
       if (valid) {
         String finalSan = gameTracker.pgn().split(RegExp(r'\s+')).last;
-        makeMoveFromExternal(finalSan, gameTracker.fen);
+        
+        if (currentIndex < fenHistory.length - 1) {
+          fenHistory.length = currentIndex + 1;
+          sanHistory.length = currentIndex;
+        }
+        
+        fenHistory.add(gameTracker.fen);
+        sanHistory.add(finalSan);
+        currentIndex++;
+        
+        controller.loadFen(gameTracker.fen);
+        setState(() { isInternalMove = false; });
+        widget.onPositionChanged?.call(gameTracker.fen);
       } else {
-        controller.makeMove(from: fromSquare, to: toSquare);
+        isInternalMove = false;
       }
     }
   }
@@ -171,17 +190,18 @@ class ChessboardFixedState extends State<ChessboardFixed> {
   void playSanMove(String san) {
     _syncGameTrackerToCurrentIndex();
     if (gameTracker.move(san)) {
-      makeMoveFromExternal(san, gameTracker.fen);
+       makeMoveFromExternal(san, gameTracker.fen);
     }
   }
 
   void takebackMove() {
     if (currentIndex > 0) {
+      isInternalMove = true;
       currentIndex--;
       fenHistory.length = currentIndex + 1;
       sanHistory.length = currentIndex;
       controller.loadFen(fenHistory[currentIndex]);
-      setState(() {});
+      setState(() { isInternalMove = false; });
       widget.onPositionChanged?.call(controller.getFen());
     }
   }
@@ -195,34 +215,39 @@ class ChessboardFixedState extends State<ChessboardFixed> {
   }
 
   void resetBoard() {
+    isInternalMove = true;
     setState(() {
       controller.resetBoard();
       fenHistory = [widget.startingFen];
       sanHistory = [];
       currentIndex = 0;
     });
+    isInternalMove = false;
   }
 
   void makeMoveFromExternal(String san, String newFen) {
+    isInternalMove = true;
     if (currentIndex < fenHistory.length - 1) {
       fenHistory.length = currentIndex + 1;
       sanHistory.length = currentIndex;
     }
     fenHistory.add(newFen);
-    fenHistory.add(san);
+    sanHistory.add(san);
     currentIndex++;
     controller.loadFen(newFen);
-    setState(() {});
+    setState(() { isInternalMove = false; });
     widget.onPositionChanged?.call(newFen); 
   }
 
   void _navigate(int newIndex) {
     if (newIndex == currentIndex) return;
+    isInternalMove = true;
     setState(() {
       currentIndex = newIndex;
       controller.loadFen(fenHistory[currentIndex]); 
-      widget.onPositionChanged?.call(fenHistory[currentIndex]);
     });
+    isInternalMove = false;
+    widget.onPositionChanged?.call(fenHistory[currentIndex]);
   }
 
   int get currentPlyCount => currentIndex;

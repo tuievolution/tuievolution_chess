@@ -52,11 +52,13 @@ class _HomeScreenState extends State<HomeScreen> {
            }
          });
          
-         String currentTurn = currentFen.split(' ')[1];
-         bool isEngineTurn = (currentTurn == 'w' && userColor == 'b') || (currentTurn == 'b' && userColor == 'w');
-         
-         if (isPlayingVsEngine && isEngineTurn) {
-            _boardKey.currentState?.playUciMove(uciMove);
+         if (isPlayingVsEngine) {
+           String currentTurn = currentFen.split(' ')[1];
+           bool isEngineTurn = (currentTurn == 'w' && userColor == 'b') || (currentTurn == 'b' && userColor == 'w');
+           
+           if (isEngineTurn) {
+              _boardKey.currentState?.playUciMove(uciMove);
+           }
          }
       }
     };
@@ -119,6 +121,7 @@ class _HomeScreenState extends State<HomeScreen> {
         stockfishService.stopEngine();
       }
     } else {
+      // ANALİZ MODU: Kendi kendimize oynarken her hamlede her renk için öneri üret
       _requestEngineMove(newFen); 
     }
   }
