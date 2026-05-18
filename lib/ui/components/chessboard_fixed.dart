@@ -35,6 +35,7 @@ class ChessboardFixed extends StatefulWidget {
 
 class ChessboardFixedState extends State<ChessboardFixed> {
   late ChessBoardController controller;
+  late chess_lib.Chess gameTracker; 
   List<String> fenHistory = []; 
   List<String> sanHistory = []; 
   int currentIndex = 0;         
@@ -69,9 +70,16 @@ class ChessboardFixedState extends State<ChessboardFixed> {
 
       var sans = controller.getSan().whereType<String>().toList();
       if (sans.isNotEmpty) {
-        String lastElement = sans.last; 
-        List<String> tokens = lastElement.trim().split(RegExp(r'\s+'));
+        String rawLast = sans.last; 
+        List<String> tokens = rawLast.trim().split(RegExp(r'\s+'));
         String pureMove = tokens.last.replaceAll(RegExp(r'^\d+\.+'), '');
+
+        _syncGameTrackerToCurrentIndex();
+        bool moved = gameTracker.move(pureMove);
+        String finalSan = pureMove;
+        if (moved) {
+            finalSan = gameTracker.pgn().split(RegExp(r'\s+')).last;
+        }
 
         if (currentIndex < fenHistory.length - 1) {
           fenHistory.length = currentIndex + 1;
@@ -79,7 +87,7 @@ class ChessboardFixedState extends State<ChessboardFixed> {
         }
         
         fenHistory.add(currentFen);
-        sanHistory.add(pureMove);
+        sanHistory.add(finalSan);
         currentIndex++;
         
         setState(() {}); 
@@ -93,31 +101,40 @@ class ChessboardFixedState extends State<ChessboardFixed> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.isPracticeMode != widget.isPracticeMode ||
         oldWidget.initialMoves != widget.initialMoves ||
-        oldWidget.startFromBeginning != widget.startFromBeginning) {
+        oldWidget.startFromBeginning != widget.startFromBeginning ||
+        oldWidget.isWhiteBottom != widget.isWhiteBottom) {
       _buildFullHistory();
     }
   }
 
+  void _syncGameTrackerToCurrentIndex() {
+    gameTracker = chess_lib.Chess.fromFEN(widget.startingFen);
+    for (int i = 0; i < currentIndex; i++) {
+      gameTracker.move(sanHistory[i]);
+    }
+  }
+
   void _buildFullHistory() {
-    final chess = chess_lib.Chess();
-    fenHistory = [chess.fen];
+    gameTracker = chess_lib.Chess.fromFEN(widget.startingFen);
+    fenHistory = [gameTracker.fen];
     sanHistory = [];
 
     for (var move in widget.initialMoves) {
       bool moved = false;
       if (move.length >= 4 && !move.contains('x') && !move.contains('+') && !move.contains('-') && !move.contains('O') && !move.contains('N') && !move.contains('B') && !move.contains('R') && !move.contains('Q') && !move.contains('K')) {
-        moved = chess.move({
+        moved = gameTracker.move({
           'from': move.substring(0, 2),
           'to': move.substring(2, 4),
           if (move.length == 5) 'promotion': move.substring(4, 5)
         });
       } else {
-        moved = chess.move(move);
+        moved = gameTracker.move(move);
       }
       
       if (moved) {
-        fenHistory.add(chess.fen);
-        sanHistory.add(move);
+        fenHistory.add(gameTracker.fen);
+        List<String> pgnTokens = gameTracker.pgn().split(RegExp(r'\s+'));
+        sanHistory.add(pgnTokens.last);
       }
     }
 
@@ -135,15 +152,16 @@ class ChessboardFixedState extends State<ChessboardFixed> {
       String toSquare = uciMove.substring(2, 4);
       String? promotion = uciMove.length == 5 ? uciMove[4] : null;
 
-      final tempChess = chess_lib.Chess.fromFEN(controller.getFen());
-      bool valid = tempChess.move({
+      _syncGameTrackerToCurrentIndex();
+      bool valid = gameTracker.move({
         'from': fromSquare,
         'to': toSquare,
         if (promotion != null) 'promotion': promotion
       });
 
       if (valid) {
-        makeMoveFromExternal("${fromSquare}${toSquare}", tempChess.fen);
+        String finalSan = gameTracker.pgn().split(RegExp(r'\s+')).last;
+        makeMoveFromExternal(finalSan, gameTracker.fen);
       } else {
         controller.makeMove(from: fromSquare, to: toSquare);
       }
@@ -151,34 +169,20 @@ class ChessboardFixedState extends State<ChessboardFixed> {
   }
 
   void playSanMove(String san) {
-    final tempChess = chess_lib.Chess.fromFEN(controller.getFen());
-    if (tempChess.move(san)) {
-      var moveHistory = tempChess.history; 
-      if (moveHistory.isNotEmpty) {
-        var lastState = moveHistory.last; 
-        controller.makeMove(from: lastState.move.fromAlgebraic, to: lastState.move.toAlgebraic);
-      }
+    _syncGameTrackerToCurrentIndex();
+    if (gameTracker.move(san)) {
+      makeMoveFromExternal(san, gameTracker.fen);
     }
   }
 
   void takebackMove() {
     if (currentIndex > 0) {
-      controller.undoMove();
-      fenHistory.removeLast();
-      sanHistory.removeLast();
       currentIndex--;
+      fenHistory.length = currentIndex + 1;
+      sanHistory.length = currentIndex;
+      controller.loadFen(fenHistory[currentIndex]);
       setState(() {});
       widget.onPositionChanged?.call(controller.getFen());
-    }
-  }
-
-  void undoMove() {
-    if (currentIndex > 0) {
-      controller.undoMove();
-      fenHistory.removeLast();
-      sanHistory.removeLast();
-      currentIndex--;
-      setState(() {});
     }
   }
 
@@ -205,7 +209,7 @@ class ChessboardFixedState extends State<ChessboardFixed> {
       sanHistory.length = currentIndex;
     }
     fenHistory.add(newFen);
-    sanHistory.add(san);
+    fenHistory.add(san);
     currentIndex++;
     controller.loadFen(newFen);
     setState(() {});
@@ -223,7 +227,6 @@ class ChessboardFixedState extends State<ChessboardFixed> {
 
   int get currentPlyCount => currentIndex;
 
-  // SİMETRİK KOORDİNAT YARDIMCILARI
   Widget _buildLettersRow() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -253,7 +256,6 @@ class ChessboardFixedState extends State<ChessboardFixed> {
           children: [
             AspectRatio(
               aspectRatio: 1.0,
-              // YENİ: Koordinatlar artık tahtanın dışında, tamamen simetrik
               child: Container(
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
@@ -262,7 +264,6 @@ class ChessboardFixedState extends State<ChessboardFixed> {
                 ),
                 child: Column(
                   children: [
-                    // Üst Harfler
                     SizedBox(
                       height: 18,
                       child: Row(
@@ -273,7 +274,6 @@ class ChessboardFixedState extends State<ChessboardFixed> {
                         ],
                       ),
                     ),
-                    // Orta: Sol Rakamlar + Tahta + Sağ Rakamlar
                     Expanded(
                       child: Row(
                         children: [
@@ -292,7 +292,6 @@ class ChessboardFixedState extends State<ChessboardFixed> {
                         ],
                       ),
                     ),
-                    // Alt Harfler
                     SizedBox(
                       height: 18,
                       child: Row(

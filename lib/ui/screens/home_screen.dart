@@ -7,6 +7,7 @@ import '../components/chessboard_fixed.dart';
 import 'tree_screen.dart';
 import 'openings_list_screen.dart';
 import '../../services/stockfish_service.dart';
+import 'package:chess/chess.dart' as chess_lib;
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -46,7 +47,6 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) {
          setState(() {
            isEngineThinking = false;
-           // Motor info satırlarını atlayıp direkt bestmove verdiyse, listeyi garantiye alıyoruz
            if (engineVariations.isEmpty && uciMove != '(none)') {
              engineVariations = [EngineVariation(rank: 1, uciMove: uciMove, score: 'Kritik Hamle')];
            }
@@ -55,7 +55,6 @@ class _HomeScreenState extends State<HomeScreen> {
          String currentTurn = currentFen.split(' ')[1];
          bool isEngineTurn = (currentTurn == 'w' && userColor == 'b') || (currentTurn == 'b' && userColor == 'w');
          
-         // Sadece sıra motordaysa otomatik oyna. Sıra bizdeyse ekranda buton olarak kalacak.
          if (isPlayingVsEngine && isEngineTurn) {
             _boardKey.currentState?.playUciMove(uciMove);
          }
@@ -135,6 +134,20 @@ class _HomeScreenState extends State<HomeScreen> {
     if (isPlayingVsEngine && userColor == 'b') {
       _requestEngineMove(AppConstants.startingFen);
     }
+  }
+
+  String _convertToSan(String uciMove) {
+    if (uciMove.length < 4) return uciMove;
+    final tempChess = chess_lib.Chess.fromFEN(currentFen);
+    bool valid = tempChess.move({
+      'from': uciMove.substring(0, 2),
+      'to': uciMove.substring(2, 4),
+      if (uciMove.length == 5) 'promotion': uciMove.substring(4, 5)
+    });
+    if (valid) {
+      return tempChess.pgn().split(RegExp(r'\s+')).last;
+    }
+    return uciMove;
   }
 
   @override
@@ -308,13 +321,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     Text('Motor devre dışı bırakıldı.', style: TextStyle(color: textSecondary, fontSize: 13))
                   else if (engineVariations.isNotEmpty)
                     Column(
-                      // SADECE TEK HAMLE GÖSTERMEK İÇİN take(1) EKLENDİ
                       children: engineVariations.take(1).map((v) => Padding(
                         padding: const EdgeInsets.only(bottom: 8.0),
                         child: InkWell(
                           onTap: () {
                             _boardKey.currentState?.playUciMove(v.uciMove);
-                            // Tıklandıktan sonra ipucunu ekrandan kaldır
                             setState(() {
                               engineVariations = [];
                             });
@@ -324,12 +335,12 @@ class _HomeScreenState extends State<HomeScreen> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                 decoration: BoxDecoration(
-                                  color: AppColors.primary, // Tek en iyi hamle her zaman birincil renk
+                                  color: AppColors.primary, 
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(color: AppColors.primary),
                                 ),
                                 child: Text(
-                                  v.uciMove,
+                                  _convertToSan(v.uciMove), 
                                   style: const TextStyle(
                                     color: Color(0xFF2A2118),
                                     fontWeight: FontWeight.bold,

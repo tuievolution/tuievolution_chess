@@ -28,7 +28,7 @@ class _TreeScreenState extends State<TreeScreen> {
 
   bool isPracticeMode = false;
   String practiceColor = 'w'; 
-  String? revealedHint; // YENİ: İpucunu tutmak için
+  String? revealedHint; 
 
   @override
   void initState() {
@@ -80,7 +80,6 @@ class _TreeScreenState extends State<TreeScreen> {
     }
   }
 
-  // YENİ: İpucunu Ekranda Göstermek İçin
   void _revealHint() {
     int current = _boardKey.currentState?.currentIndex ?? 0;
     if (current < initialHistory.length) {
@@ -108,7 +107,7 @@ class _TreeScreenState extends State<TreeScreen> {
     int total = _boardKey.currentState?.fenHistory.length ?? 0;
     int current = _boardKey.currentState?.currentIndex ?? 0;
     
-    setState(() { revealedHint = null; }); // Hamle yapıldığında ipucunu temizle
+    setState(() { revealedHint = null; }); 
 
     if (current >= total - 1) {
       Future.delayed(const Duration(milliseconds: 500), _showSuccess);
@@ -156,7 +155,6 @@ class _TreeScreenState extends State<TreeScreen> {
   void _onBoardPositionChanged(String newFen) {
     if (isPracticeMode) return; 
 
-    // SERBEST KEŞİF MODU KESİN KONTROL: Ağaç dışı hamleye izin verilmez
     if (newFen == currentFen) return;
 
     final validNextMoves = dataService.getNextMovesForUI(currentFen);
@@ -168,15 +166,14 @@ class _TreeScreenState extends State<TreeScreen> {
       }
     }
 
-    // Eğer hamle ağaçta yoksa geri al!
     if (!isValid && validNextMoves.isNotEmpty) {
-      _boardKey.currentState?.undoMove();
+      _boardKey.currentState?.takebackMove();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Bu hamle açılış teorisinde yok! Sadece ağaçtaki hamleler oynanabilir.'), backgroundColor: Colors.red),
       );
       return;
     } else if (!isValid && validNextMoves.isEmpty && newFen != currentFen) {
-      _boardKey.currentState?.undoMove();
+      _boardKey.currentState?.takebackMove();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Açılış teorisinin sonuna ulaştınız. Geri alarak farklı bir varyant deneyin.'), backgroundColor: Colors.red),
       );

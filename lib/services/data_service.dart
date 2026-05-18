@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/opening_node.dart';
 import '../core/constants.dart';
+import 'package:chess/chess.dart' as chess_lib;
 
 class DataService {
   OpeningNode? root; 
@@ -66,7 +67,6 @@ class DataService {
     return null;
   }
 
-  // GÜNCELLENDİ: Diğer sınıfların hamleleri doğrulayabilmesi için Public yapıldı
   String normalizeFen(String fen) {
     final parts = fen.split(' ');
     if (parts.length >= 3) {
@@ -89,11 +89,27 @@ class DataService {
     OpeningNode? currentNode = _findNodeByFen(root!, currentFen);
     if (currentNode == null) return []; 
 
-    return currentNode.children.entries.map((e) => {
-      'move': e.key,
-      'name': e.value.openingName ?? 'Variant: ${e.key}', 
-      'fen': e.value.fen,
-      'isCompleted': false, 
+    return currentNode.children.entries.map((e) {
+      String sanMove = e.key;
+      if (sanMove.length >= 4 && !sanMove.contains('x') && !sanMove.contains('+') && !sanMove.contains('-') && !sanMove.contains('O') && !sanMove.contains('N') && !sanMove.contains('B') && !sanMove.contains('R') && !sanMove.contains('Q') && !sanMove.contains('K')) {
+         final tempChess = chess_lib.Chess.fromFEN(currentFen);
+         bool valid = tempChess.move({
+            'from': sanMove.substring(0, 2),
+            'to': sanMove.substring(2, 4),
+            if (sanMove.length == 5) 'promotion': sanMove.substring(4, 5)
+         });
+         if (valid) {
+             sanMove = tempChess.pgn().split(RegExp(r'\s+')).last;
+         }
+      }
+
+      return {
+        'move': sanMove,
+        'originalUci': e.key, 
+        'name': e.value.openingName ?? 'Variant: $sanMove', 
+        'fen': e.value.fen,
+        'isCompleted': false, 
+      };
     }).toList();
   }
 
