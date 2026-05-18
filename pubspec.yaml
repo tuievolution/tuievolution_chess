@@ -40,9 +40,6 @@ flutter:
     - .env
 
 flutter_launcher_icons:
-  android: true
-  ios: true
-  remove_alpha_ios: true
-  image_path: "assets/icon/ic_launcher.png"
-  adaptive_icon_background: "#F2EBE1" # Logonuzun krem arka plan rengi
-  adaptive_icon_foreground: "assets/icon/ic_launcher.png"
+  android: false  # Paketin Android ikonlarını ellemesini/üretmesini tamamen yasaklar.
+  ios: true       # Eğer iOS için o klasörleri (Assets.xcassets) Git'ten çekmediyseniz, iOS için üretmeye devam etsin.
+  image_path: "assets/icon/ic_launcher.png" # Bu sadece iOS üretimi için referans olarak kalır.
