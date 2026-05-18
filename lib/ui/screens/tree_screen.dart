@@ -72,7 +72,10 @@ class _TreeScreenState extends State<TreeScreen> {
       engineBestMove = null;
       revealedHint = null;
     });
+    
+    _boardKey.currentState?.restartPractice(); // Tahtayı 0. hamleye sarar
 
+    // Eğer siyahsak, ilk hamle beyazındır. Beyazın oynaması için tetikliyoruz.
     if (color == 'b') {
       Future.delayed(const Duration(milliseconds: 600), () {
         _playNextPracticeMove();
@@ -82,24 +85,38 @@ class _TreeScreenState extends State<TreeScreen> {
 
   void _revealHint() {
     int current = _boardKey.currentState?.currentIndex ?? 0;
-    if (current < initialHistory.length) {
+    final sanList = _boardKey.currentState?.sanHistory ?? [];
+    if (current < sanList.length) {
       setState(() {
-        revealedHint = initialHistory[current];
+        revealedHint = sanList[current];
       });
     }
   }
 
   void _playNextPracticeMove() {
-    int current = _boardKey.currentState?.currentIndex ?? 0;
-    if (current < initialHistory.length) {
-      _boardKey.currentState?.playSanMove(initialHistory[current]);
-      setState(() { revealedHint = null; });
+    bool played = _boardKey.currentState?.navigateForward() ?? false;
+    setState(() { revealedHint = null; });
+    
+    // Otomatik ileri sardığımız için onCorrectMove manuel tetiklenmeli
+    if (played) {
+      _onCorrectMove();
     }
   }
 
   void _onWrongMove() {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Hatalı hamle! (Bilemezsen İpucu tuşuyla kopya çekebilirsin)'), backgroundColor: Colors.red),
+      SnackBar(
+        content: const Row(
+          children: [
+            Icon(Icons.error_outline, color: Colors.white),
+            SizedBox(width: 8),
+            Expanded(child: Text('Hatalı hamle! (İpucu tuşuyla kopya çekebilirsiniz)')),
+          ],
+        ),
+        backgroundColor: const Color(0xFFD9534F), // Göz yormayan Soft Red
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
     );
   }
 
@@ -114,8 +131,9 @@ class _TreeScreenState extends State<TreeScreen> {
       return;
     }
 
+    // Uygulama sıradaki hamleyi otomatik oynar (Rakip Hamlesi)
     Future.delayed(const Duration(milliseconds: 600), () {
-      _playNextPracticeMove();
+      _boardKey.currentState?.navigateForward();
       
       current = _boardKey.currentState?.currentIndex ?? 0;
       if (current >= total - 1) {
@@ -129,6 +147,7 @@ class _TreeScreenState extends State<TreeScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.surface(context),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(
           children: [
             Icon(Icons.emoji_events, color: Colors.amber, size: 28),
@@ -169,13 +188,21 @@ class _TreeScreenState extends State<TreeScreen> {
     if (!isValid && validNextMoves.isNotEmpty) {
       _boardKey.currentState?.takebackMove();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bu hamle açılış teorisinde yok! Sadece ağaçtaki hamleler oynanabilir.'), backgroundColor: Colors.red),
+        SnackBar(
+          content: const Text('Bu hamle açılış teorisinde yok! Sadece ağaçtaki hamleler oynanabilir.'),
+          backgroundColor: const Color(0xFFD9534F),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
       return;
     } else if (!isValid && validNextMoves.isEmpty && newFen != currentFen) {
       _boardKey.currentState?.takebackMove();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Açılış teorisinin sonuna ulaştınız. Geri alarak farklı bir varyant deneyin.'), backgroundColor: Colors.red),
+        SnackBar(
+          content: const Text('Açılış teorisinin sonuna ulaştınız. Geri alarak farklı bir varyant deneyin.'),
+          backgroundColor: const Color(0xFFD9534F),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
       return;
     }

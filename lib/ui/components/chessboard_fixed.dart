@@ -40,7 +40,7 @@ class ChessboardFixedState extends State<ChessboardFixed> {
   List<String> sanHistory = []; 
   int currentIndex = 0;         
   late bool isEngineEnabled;
-  bool isInternalMove = false; // Kilitlenmeyi çözen bayrak
+  bool isInternalMove = false; 
 
   @override
   void initState() {
@@ -151,7 +151,6 @@ class ChessboardFixedState extends State<ChessboardFixed> {
     isInternalMove = false;
   }
 
-  // RANGE ERROR ÇÖZÜLDÜ: Motor hamlesi tamamen senkronize edildi
   void playUciMove(String uciMove) {
     if (uciMove.length >= 4 && mounted) {
       isInternalMove = true;
@@ -187,10 +186,18 @@ class ChessboardFixedState extends State<ChessboardFixed> {
     }
   }
 
-  void playSanMove(String san) {
-    _syncGameTrackerToCurrentIndex();
-    if (gameTracker.move(san)) {
-       makeMoveFromExternal(san, gameTracker.fen);
+  // YENİ: Pratik modunu tamamen sıfırdan ve hatasız başlatır
+  void restartPractice() {
+    isInternalMove = true;
+    setState(() {
+      currentIndex = 0;
+      if (fenHistory.isNotEmpty) {
+        controller.loadFen(fenHistory[0]);
+      }
+    });
+    isInternalMove = false;
+    if (fenHistory.isNotEmpty) {
+      widget.onPositionChanged?.call(fenHistory[0]);
     }
   }
 
