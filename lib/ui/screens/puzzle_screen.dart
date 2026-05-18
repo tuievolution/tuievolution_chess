@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import '../../core/theme.dart';
+import '../../models/puzzle_model.dart';
 import '../widgets/grow_button.dart';
-import '../widgets/grow_card.dart';
-import '../widgets/grow_progress_bar.dart';
 import '../components/chessboard_fixed.dart';
+import '../../main.dart'; // supabaseService ve dataService erişimi için
+import 'package:chess/chess.dart' as chess_lib;
 
 class PuzzleScreen extends StatefulWidget {
   const PuzzleScreen({super.key});
@@ -13,173 +15,333 @@ class PuzzleScreen extends StatefulWidget {
 }
 
 class _PuzzleScreenState extends State<PuzzleScreen> {
+  final GlobalKey<ChessboardFixedState> _boardKey = GlobalKey<ChessboardFixedState>();
+
+  List<PuzzleModel> puzzleQueue = [];
+  int currentPuzzleIndex = 0;
+  bool isLoading = true;
+
+  int moveIndex = 0; 
+  bool isPuzzleCompleted = false;
+  bool isOpponentThinking = false;
+  String feedbackMessage = "Yükleniyor...";
+  Color feedbackColor = Colors.grey;
+  
+  // Döngü kilitlenmelerini önlemek ve hamle doğrulamak için kritik FEN takibi
+  String lastCorrectFen = ""; 
+
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.bg(context),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 600),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Header
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Puzzle #4,821', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 20)),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Row(
-                            children: List.generate(5, (index) => const Icon(Icons.star, size: 16, color: AppColors.primary)),
-                          ),
-                          const SizedBox(width: 8),
-                          Text('ADVANCED', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.textSecondary(context))),
-                        ],
-                      ),
-                    ],
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryDark.withValues(alpha: 0.3),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.primaryDark),
-                    ),
-                    child: Column(
-                      children: [
-                        Text('+15', style: Theme.of(context).textTheme.titleLarge?.copyWith(color: AppColors.primary)),
-                        Text('LEAVES', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.textSecondary(context))),
-                      ],
-                    ),
-                  )
-                ],
-              ),
-              const SizedBox(height: 24),
-              
-              // Chessboard
-              // Provide a dummy FEN for the puzzle (this is just an example FEN)
-              const ChessboardFixed(startingFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'),
-              
-              const SizedBox(height: 24),
-              
-              // Action Buttons
-              Row(
-                children: [
-                  Expanded(
-                    child: GrowButton(
-                      text: 'Hint',
-                      icon: Icons.lightbulb_outline,
-                      type: GrowButtonType.secondary,
-                      onPressed: () {},
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: GrowButton(
-                      text: 'Next Move',
-                      icon: Icons.play_arrow,
-                      type: GrowButtonType.primary,
-                      onPressed: () {},
-                    ),
-                  ),
-                ],
-              ),
-              
-              const SizedBox(height: 32),
-              
-              // Session History
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Session History', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 18)),
-                  Text('Today', style: Theme.of(context).textTheme.bodyMedium),
-                ],
-              ),
-              const SizedBox(height: 16),
-              
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _buildHistoryPill(true, '#4820'),
-                    _buildHistoryPill(true, '#4819'),
-                    _buildHistoryPill(false, '#4818'),
-                    _buildHistoryPill(true, '#4817'),
-                  ],
-                ),
-              ),
-              
-              const SizedBox(height: 32),
-              
-              // Daily Growth Target
-              GrowCard(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.bolt, color: AppColors.primary, size: 20),
-                            const SizedBox(width: 8),
-                            Text('Daily Growth Target', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 16)),
-                          ],
-                        ),
-                        Text('75%', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.primary)),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    const GrowProgressBar(progress: 0.75),
-                    const SizedBox(height: 16),
-                    Text(
-                      '"Nurture your tactical vision. 15 more leaves to sprout a new rank."',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontStyle: FontStyle.italic),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  void initState() {
+    super.initState();
+    _loadPuzzlesFromSupabase();
   }
 
-  Widget _buildHistoryPill(bool isSuccess, String label) {
-    return Container(
-      margin: const EdgeInsets.only(right: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.surface(context),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: isSuccess ? AppColors.primaryDark : Colors.red.withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: isSuccess ? AppColors.primary : Colors.red[300],
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              isSuccess ? Icons.check : Icons.close,
-              size: 12,
-              color: AppColors.bg(context),
+  Future<void> _loadPuzzlesFromSupabase() async {
+    setState(() => isLoading = true);
+    
+    // Kullanıcının mevcut seviyesine göre (Örn: 1500) Supabase'den 5 bulmaca getiriyoruz
+    final fetchedPuzzles = await supabaseService.fetchPuzzlesByRating(1500, limit: 5);
+    
+    if (mounted) {
+      setState(() {
+        puzzleQueue = fetchedPuzzles;
+        currentPuzzleIndex = 0;
+        isLoading = false;
+      });
+
+      if (puzzleQueue.isNotEmpty) {
+        _initializeCurrentPuzzle();
+      }
+    }
+  }
+
+  void _initializeCurrentPuzzle() {
+    final puzzle = puzzleQueue[currentPuzzleIndex];
+    setState(() {
+      moveIndex = 0;
+      isPuzzleCompleted = false;
+      isOpponentThinking = true;
+      lastCorrectFen = puzzle.fen;
+      feedbackMessage = "Bulmaca hazırlandı. Rakip hamlesi bekleniyor...";
+      feedbackColor = Colors.grey;
+    });
+
+    // Tahtayı temizle ve FEN düzenini kur
+    _boardKey.currentState?.resetBoard();
+    
+    // Rakibin bulmacayı başlatan hatalı/feda hamlesini oynaması için tetikliyoruz
+    Future.delayed(const Duration(milliseconds: 1000), () {
+      _playOpponentMove();
+    });
+  }
+
+  void _playOpponentMove() {
+    if (isPuzzleCompleted || puzzleQueue.isEmpty) return;
+    final puzzle = puzzleQueue[currentPuzzleIndex];
+
+    if (moveIndex < puzzle.moves.length && mounted) {
+      String uciMove = puzzle.moves[moveIndex];
+      
+      setState(() { isOpponentThinking = true; });
+      _boardKey.currentState?.playUciMove(uciMove);
+      
+      setState(() {
+        moveIndex++; // Sıra kullanıcıya geçti
+        isOpponentThinking = false;
+        feedbackMessage = "Sıra sizde! En iyi hamleyi bulun.";
+        feedbackColor = AppColors.primary;
+      });
+    }
+  }
+
+  // GERÇEK ZAMANLI KESİN DOĞRULAMA MOTORU (Strict Verification)
+  void _onPositionChanged(String newFen) {
+    if (isLoading || puzzleQueue.isEmpty || isPuzzleCompleted || isOpponentThinking) return;
+    
+    // Geri alma (takeback) tetiklendiğinde sonsuz döngü oluşmasını engelleme filtresi
+    if (dataService.normalizeFen(newFen) == dataService.normalizeFen(lastCorrectFen)) {
+      return;
+    }
+
+    final puzzle = puzzleQueue[currentPuzzleIndex];
+    if (moveIndex >= puzzle.moves.length) return;
+
+    // Beklenen doğru hamleyi sanal tahtada simüle ediyoruz
+    String expectedUci = puzzle.moves[moveIndex];
+    final tempChess = chess_lib.Chess.fromFEN(lastCorrectFen);
+    
+    String fromSquare = expectedUci.substring(0, 2);
+    String toSquare = expectedUci.substring(2, 4);
+    String? promotion = expectedUci.length == 5 ? expectedUci[4] : null;
+
+    Map<String, dynamic> moveObj = {
+      'from': fromSquare,
+      'to': toSquare,
+    };
+    if (promotion != null) moveObj['promotion'] = promotion;
+
+    bool valid = tempChess.move(moveObj);
+
+    // Kullanıcının yaptığı hamle sonucu oluşan yeni FEN, beklenen FEN ile eşleşiyor mu?
+    if (valid && dataService.normalizeFen(newFen) == dataService.normalizeFen(tempChess.fen)) {
+      // DOĞRU HAMLE!
+      setState(() {
+        lastCorrectFen = newFen;
+        moveIndex++;
+        feedbackMessage = "Harika! Doğru hamle. 🎯";
+        feedbackColor = Colors.green;
+      });
+
+      if (moveIndex >= puzzle.moves.length) {
+        setState(() {
+          isPuzzleCompleted = true;
+          feedbackMessage = "Tebrikler! Bulmacayı Başarıyla Çözdünüz 🍃";
+        });
+      } else {
+        // Bulmaca bitmediyse bilgisayar sonraki yanıtını otomatik oynar
+        setState(() { isOpponentThinking = true; });
+        Future.delayed(const Duration(milliseconds: 800), () {
+          _playOpponentMove();
+        });
+      }
+    } else {
+      // YANLIŞ HAMLE! Tahtadaki hatalı taşı fiziksel olarak geri çektiriyoruz
+      _boardKey.currentState?.takebackMove();
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
+              SizedBox(width: 10),
+              Expanded(child: Text('Hatalı hamle! Doğru çözümü bulmaya çalışın.', style: TextStyle(fontWeight: FontWeight.w600))),
+            ],
+          ),
+          backgroundColor: const Color(0xFFC94B4B), // Göz yormayan asil Soft Red / Mat Kırmızı
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  void _getHint() {
+    if (puzzleQueue.isEmpty || isPuzzleCompleted) return;
+    final puzzle = puzzleQueue[currentPuzzleIndex];
+    
+    if (moveIndex < puzzle.moves.length) {
+      String hintMove = puzzle.moves[moveIndex];
+      
+      final tempChess = chess_lib.Chess.fromFEN(lastCorrectFen);
+      String fromSquare = hintMove.substring(0, 2);
+      String toSquare = hintMove.substring(2, 4);
+      String? promotion = hintMove.length == 5 ? hintMove[4] : null;
+
+      Map<String, dynamic> moveObj = {
+        'from': fromSquare,
+        'to': toSquare,
+      };
+      if (promotion != null) moveObj['promotion'] = promotion;
+
+      bool valid = tempChess.move(moveObj);
+      
+      String displaySan = hintMove;
+      if (valid) {
+        displaySan = tempChess.pgn().split(RegExp(r'\s+')).last;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.lightbulb, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Expanded(child: Text('İpucu Hamlesi: $displaySan', style: const TextStyle(fontWeight: FontWeight.bold))),
+            ],
+          ),
+          backgroundColor: const Color(0xFFD9822B), 
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
+  }
+
+  void _playHintForUser() {
+    if (puzzleQueue.isEmpty || isPuzzleCompleted) return;
+    final puzzle = puzzleQueue[currentPuzzleIndex];
+    if (moveIndex < puzzle.moves.length) {
+      _boardKey.currentState?.playUciMove(puzzle.moves[moveIndex]);
+    }
+  }
+
+  void _nextPuzzle() {
+    if (currentPuzzleIndex < puzzleQueue.length - 1) {
+      setState(() {
+        currentPuzzleIndex++;
+      });
+      _initializeCurrentPuzzle();
+    } else {
+      _loadPuzzlesFromSupabase(); // 5'li paket bittiyse buluttan yeni paket indir
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading) {
+      return Scaffold(
+        backgroundColor: AppColors.bg(context),
+        body: const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      );
+    }
+
+    if (puzzleQueue.isEmpty) {
+      return Scaffold(
+        backgroundColor: AppColors.bg(context),
+        body: const Center(child: Text("Seviyenize uygun bulmaca bulunamadı.", style: TextStyle(color: Colors.white))),
+      );
+    }
+
+    final puzzle = puzzleQueue[currentPuzzleIndex];
+    bool isWhiteToMoveInitially = puzzle.fen.split(' ')[1] == 'w';
+    bool amIWhite = !isWhiteToMoveInitially; // İlk hamleyi rakip yaptığı için biz tersiyiz
+
+    return Scaffold(
+      backgroundColor: AppColors.bg(context),
+      appBar: AppBar(title: const Text('TuiEvolution Puzzles')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Bulmaca #${puzzle.id}', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 20, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            const Icon(Icons.star, size: 16, color: AppColors.primary),
+                            const SizedBox(width: 6),
+                            Text('ZORLUK: ${puzzle.rating}', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.textSecondary(context), fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryDark.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.primaryDark),
+                      ),
+                      child: Text('Kuyruk: ${currentPuzzleIndex + 1} / ${puzzleQueue.length}', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 12)),
+                    )
+                  ],
+                ),
+                const SizedBox(height: 24),
+                
+                ChessboardFixed(
+                  key: _boardKey,
+                  startingFen: puzzle.fen,
+                  isWhiteBottom: amIWhite, 
+                  onPositionChanged: _onPositionChanged,
+                ),
+                
+                const SizedBox(height: 18),
+
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: feedbackColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: feedbackColor.withValues(alpha: 0.4)),
+                  ),
+                  child: Center(
+                    child: Text(
+                      feedbackMessage,
+                      style: TextStyle(color: feedbackColor, fontWeight: feedbackColor == Colors.green ? FontWeight.bold : FontWeight.w600, fontSize: 15),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 18),
+                
+                Row(
+                  children: [
+                    Expanded(
+                      child: GrowButton(
+                        text: 'Hamleyi Göster',
+                        icon: Icons.lightbulb_outline,
+                        type: GrowButtonType.secondary,
+                        onPressed: isPuzzleCompleted ? null : _getHint,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: GrowButton(
+                        text: isPuzzleCompleted ? 'Sonraki Bulmaca' : 'Benim Yerime Oyna',
+                        icon: isPuzzleCompleted ? Icons.skip_next : Icons.play_arrow,
+                        type: GrowButtonType.primary,
+                        onPressed: isPuzzleCompleted ? _nextPuzzle : _playHintForUser,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 8),
-          Text(label, style: Theme.of(context).textTheme.bodyMedium),
-        ],
+        ),
       ),
     );
   }
