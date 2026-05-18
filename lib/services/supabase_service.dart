@@ -35,17 +35,34 @@ class SupabaseService {
 
   Future<List<PuzzleModel>> fetchPuzzlesByRating(int targetRating, {int limit = 5}) async {
     try {
-      // Hedef rating değerinin +- 150 puan aralığındaki bulmacaları filtreler ve getirir
-      final response = await _client
+      debugPrint("Uygulama: Supabase'den $targetRating ELO için bulmaca talep ediyor...");
+      
+      // 1. Adım: Kullanıcının ELO seviyesinin +- 150 puan aralığını sorgula
+      var response = await _client
           .from('puzzles')
           .select()
           .gte('rating', targetRating - 150)
           .lte('rating', targetRating + 150)
           .limit(limit);
 
-      final List<dynamic> data = response as List<dynamic>;
+      List<dynamic> data = response as List<dynamic>;
+      debugPrint("Uygulama: Ana sorgudan gelen bulmaca sayısı: ${data.length}");
+
+      // 2. Adım: Eğer o aralıkta veri bulunamadıysa veritabanındaki en düşük ELO'lu verilere yönlen
+      if (data.isEmpty) {
+        debugPrint("Uygulama: Hedef aralıkta veri bulunamadı (RLS engeli veya veri yoksa). En düşük ELO'lara yönleniliyor...");
+        
+        final fallbackResponse = await _client
+            .from('puzzles')
+            .select()
+            .order('rating', ascending: true)
+            .limit(limit);
+            
+        data = fallbackResponse as List<dynamic>;
+        debugPrint("Uygulama: Geri çekilme (Fallback) sorgusundan gelen bulmaca sayısı: ${data.length}");
+      }
       
-      // Supabase tablosundaki küçük harfli sütun isimlerini modelimizle eşleştiriyoruz
+      // Supabase tablosundaki verileri modelimizle harmanlıyoruz
       return data.map((json) => PuzzleModel.fromJson({
         "PuzzleId": json['puzzle_id'],
         "FEN": json['fen'],

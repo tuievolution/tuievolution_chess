@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:supabase_flutter/supabase_flutter.dart'; 
 import '../../core/theme.dart';
 import '../../models/puzzle_model.dart';
 import '../widgets/grow_button.dart';
 import '../components/chessboard_fixed.dart';
-import '../../main.dart'; // supabaseService ve dataService erişimi için
+import '../../main.dart'; 
 import 'package:chess/chess.dart' as chess_lib;
 
 class PuzzleScreen extends StatefulWidget {
@@ -27,8 +28,8 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   String feedbackMessage = "Yükleniyor...";
   Color feedbackColor = Colors.grey;
   
-  // Döngü kilitlenmelerini önlemek ve hamle doğrulamak için kritik FEN takibi
   String lastCorrectFen = ""; 
+  int currentUserRating = 400; 
 
   @override
   void initState() {
@@ -36,11 +37,24 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     _loadPuzzlesFromSupabase();
   }
 
+  int _calculateUserRating() {
+    final session = Supabase.instance.client.auth.currentSession;
+    if (session != null) {
+      return 1200; 
+    } else {
+      return 400; 
+    }
+  }
+
   Future<void> _loadPuzzlesFromSupabase() async {
     setState(() => isLoading = true);
     
-    // Kullanıcının mevcut seviyesine göre (Örn: 1500) Supabase'den 5 bulmaca getiriyoruz
-    final fetchedPuzzles = await supabaseService.fetchPuzzlesByRating(1500, limit: 5);
+    int targetRating = _calculateUserRating();
+    setState(() {
+      currentUserRating = targetRating;
+    });
+    
+    final fetchedPuzzles = await supabaseService.fetchPuzzlesByRating(targetRating, limit: 5);
     
     if (mounted) {
       setState(() {
@@ -56,21 +70,22 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   }
 
   void _initializeCurrentPuzzle() {
+    if (puzzleQueue.isEmpty) return;
     final puzzle = puzzleQueue[currentPuzzleIndex];
     setState(() {
       moveIndex = 0;
       isPuzzleCompleted = false;
       isOpponentThinking = true;
       lastCorrectFen = puzzle.fen;
-      feedbackMessage = "Bulmaca hazırlandı. Rakip hamlesi bekleniyor...";
+      // GÜNCELLENDİ: Kullanıcıya hazırlanması için zaman ve mesaj veriyoruz
+      feedbackMessage = "Bulmaca hazırlandı. Tahta inceleniyor...";
       feedbackColor = Colors.grey;
     });
 
-    // Tahtayı temizle ve FEN düzenini kur
     _boardKey.currentState?.resetBoard();
     
-    // Rakibin bulmacayı başlatan hatalı/feda hamlesini oynaması için tetikliyoruz
-    Future.delayed(const Duration(milliseconds: 1000), () {
+    // GÜNCELLENDİ: Başlangıç gecikmesi 1 saniyeden 1.5 saniyeye (1500ms) çıkarıldı
+    Future.delayed(const Duration(milliseconds: 1500), () {
       _playOpponentMove();
     });
   }
@@ -86,7 +101,8 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       _boardKey.currentState?.playUciMove(uciMove);
       
       setState(() {
-        moveIndex++; // Sıra kullanıcıya geçti
+        lastCorrectFen = _boardKey.currentState?.controller.getFen() ?? puzzle.fen;
+        moveIndex++; 
         isOpponentThinking = false;
         feedbackMessage = "Sıra sizde! En iyi hamleyi bulun.";
         feedbackColor = AppColors.primary;
@@ -94,11 +110,9 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     }
   }
 
-  // GERÇEK ZAMANLI KESİN DOĞRULAMA MOTORU (Strict Verification)
   void _onPositionChanged(String newFen) {
     if (isLoading || puzzleQueue.isEmpty || isPuzzleCompleted || isOpponentThinking) return;
     
-    // Geri alma (takeback) tetiklendiğinde sonsuz döngü oluşmasını engelleme filtresi
     if (dataService.normalizeFen(newFen) == dataService.normalizeFen(lastCorrectFen)) {
       return;
     }
@@ -106,7 +120,6 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     final puzzle = puzzleQueue[currentPuzzleIndex];
     if (moveIndex >= puzzle.moves.length) return;
 
-    // Beklenen doğru hamleyi sanal tahtada simüle ediyoruz
     String expectedUci = puzzle.moves[moveIndex];
     final tempChess = chess_lib.Chess.fromFEN(lastCorrectFen);
     
@@ -122,9 +135,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
 
     bool valid = tempChess.move(moveObj);
 
-    // Kullanıcının yaptığı hamle sonucu oluşan yeni FEN, beklenen FEN ile eşleşiyor mu?
     if (valid && dataService.normalizeFen(newFen) == dataService.normalizeFen(tempChess.fen)) {
-      // DOĞRU HAMLE!
       setState(() {
         lastCorrectFen = newFen;
         moveIndex++;
@@ -137,15 +148,16 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
           isPuzzleCompleted = true;
           feedbackMessage = "Tebrikler! Bulmacayı Başarıyla Çözdünüz 🍃";
         });
+        _showSuccessDialog();
       } else {
-        // Bulmaca bitmediyse bilgisayar sonraki yanıtını otomatik oynar
         setState(() { isOpponentThinking = true; });
-        Future.delayed(const Duration(milliseconds: 800), () {
+        // GÜNCELLENDİ: Rakibin cevap süresi 800ms'den 1200ms'ye uzatıldı (Daha sakin bir oyun)
+        Future.delayed(const Duration(milliseconds: 1200), () {
           _playOpponentMove();
         });
       }
     } else {
-      // YANLIŞ HAMLE! Tahtadaki hatalı taşı fiziksel olarak geri çektiriyoruz
+      setState(() { isOpponentThinking = true; }); 
       _boardKey.currentState?.takebackMove();
       
       ScaffoldMessenger.of(context).showSnackBar(
@@ -154,16 +166,31 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
             children: [
               Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
               SizedBox(width: 10),
-              Expanded(child: Text('Hatalı hamle! Doğru çözümü bulmaya çalışın.', style: TextStyle(fontWeight: FontWeight.w600))),
+              Expanded(child: Text('Hatalı hamle! Rakibin hamlesine dikkat edin.', style: TextStyle(fontWeight: FontWeight.w600))),
             ],
           ),
-          backgroundColor: const Color(0xFFC94B4B), // Göz yormayan asil Soft Red / Mat Kırmızı
+          backgroundColor: const Color(0xFFC94B4B), 
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           duration: const Duration(seconds: 2),
         ),
       );
+
+      if (moveIndex > 0) {
+        _boardKey.currentState?.takebackMove(); 
+        
+        setState(() {
+          moveIndex--; 
+          lastCorrectFen = _boardKey.currentState?.controller.getFen() ?? puzzle.fen;
+        });
+        
+        Future.delayed(const Duration(milliseconds: 800), () {
+          if (mounted) _playOpponentMove();
+        });
+      } else {
+        setState(() { isOpponentThinking = false; });
+      }
     }
   }
 
@@ -225,8 +252,66 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       });
       _initializeCurrentPuzzle();
     } else {
-      _loadPuzzlesFromSupabase(); // 5'li paket bittiyse buluttan yeni paket indir
+      _loadPuzzlesFromSupabase(); 
     }
+  }
+
+  void _showSuccessDialog() {
+    final puzzle = puzzleQueue[currentPuzzleIndex];
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: AppColors.surface(context),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.emoji_events, color: Colors.amber, size: 28),
+              SizedBox(width: 8),
+              Text('Tebrikler! 🎉', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.amber)),
+            ],
+          ),
+          content: Text(
+            'Bulmacayı başarıyla çözdünüz. (Puan: ${puzzle.rating})',
+            style: TextStyle(color: AppColors.textPrimary(context)),
+          ),
+          actions: [
+            if (Supabase.instance.client.auth.currentSession == null)
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _nextPuzzle();
+                },
+                child: const Text('Sonraki Bulmaca →', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+              )
+            else ...[
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _nextPuzzle(); 
+                },
+                child: const Text('Aynı ELO ile Devam Et →', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: const Color(0xFF2A2118),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Ayarlar ekranı yakında kurulacaktır. Buradan ELO seviyenizi güncelleyebileceksiniz.'), behavior: SnackBarBehavior.floating),
+                  );
+                },
+                child: const Text('ELO Güncelle / Ayarlar', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -241,13 +326,33 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     if (puzzleQueue.isEmpty) {
       return Scaffold(
         backgroundColor: AppColors.bg(context),
-        body: const Center(child: Text("Seviyenize uygun bulmaca bulunamadı.", style: TextStyle(color: Colors.white))),
+        appBar: AppBar(title: const Text('TuiEvolution Puzzles')),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.search_off, size: 48, color: Colors.grey),
+              const SizedBox(height: 16),
+              Text("Şu an $currentUserRating ELO seviyesine uygun\nbulmaca bulunamadı.", textAlign: TextAlign.center, style: const TextStyle(color: Colors.white)),
+            ],
+          )
+        ),
       );
     }
 
     final puzzle = puzzleQueue[currentPuzzleIndex];
     bool isWhiteToMoveInitially = puzzle.fen.split(' ')[1] == 'w';
-    bool amIWhite = !isWhiteToMoveInitially; // İlk hamleyi rakip yaptığı için biz tersiyiz
+    bool amIWhite = !isWhiteToMoveInitially; 
+    
+    // GÜNCELLENDİ: Sıra kimde olduğunu belirleyen mantık
+    bool isWhiteTurn = true;
+    if (lastCorrectFen.isNotEmpty) {
+      final parts = lastCorrectFen.split(' ');
+      if (parts.length > 1) {
+        isWhiteTurn = parts[1] == 'w';
+      }
+    }
+    bool isMyTurn = (isWhiteTurn && amIWhite) || (!isWhiteTurn && !amIWhite);
 
     return Scaffold(
       backgroundColor: AppColors.bg(context),
@@ -272,7 +377,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
                           children: [
                             const Icon(Icons.star, size: 16, color: AppColors.primary),
                             const SizedBox(width: 6),
-                            Text('ZORLUK: ${puzzle.rating}', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.textSecondary(context), fontWeight: FontWeight.bold)),
+                            Text('BULMACA ELO: ${puzzle.rating}', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.textSecondary(context), fontWeight: FontWeight.bold)),
                           ],
                         ),
                       ],
@@ -288,7 +393,51 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
                     )
                   ],
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
+                
+                // YENİ: SIRA KİMDE GÖSTERGESİ (Turn Indicator)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isWhiteTurn ? const Color(0xFFE8E8E8) : const Color(0xFF1E1E1E),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isMyTurn && !isOpponentThinking ? AppColors.primary : Colors.transparent, 
+                          width: 2
+                        ),
+                        boxShadow: [
+                          if (isMyTurn && !isOpponentThinking)
+                            BoxShadow(color: AppColors.primary.withValues(alpha: 0.3), blurRadius: 10, spreadRadius: 1)
+                        ]
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isWhiteTurn ? Icons.circle : Icons.circle_outlined, 
+                            color: isWhiteTurn ? Colors.black87 : Colors.white, 
+                            size: 14
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            isOpponentThinking 
+                                ? 'Rakip Düşünüyor (${isWhiteTurn ? 'Beyaz' : 'Siyah'})' 
+                                : '${isWhiteTurn ? 'Beyaz' : 'Siyah'} Oynar',
+                            style: TextStyle(
+                              color: isWhiteTurn ? Colors.black87 : Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 
                 ChessboardFixed(
                   key: _boardKey,
@@ -297,7 +446,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
                   onPositionChanged: _onPositionChanged,
                 ),
                 
-                const SizedBox(height: 18),
+                const SizedBox(height: 12),
 
                 Container(
                   padding: const EdgeInsets.all(16),
@@ -315,7 +464,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 18),
+                const SizedBox(height: 12),
                 
                 Row(
                   children: [

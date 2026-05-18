@@ -12,6 +12,7 @@ dependencies:
     sdk: flutter
 
   cupertino_icons: ^1.0.8
+  flutter_launcher_icons: ^0.13.1
   
   # --- FRONTEND PAKETLERİ ---
   flutter_svg: ^2.2.4
@@ -37,3 +38,11 @@ flutter:
   # Veri setini uygulamanın içine dahil ediyoruz
   assets:
     - .env
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  remove_alpha_ios: true
+  image_path: "assets/icon/ic_launcher.png"
+  adaptive_icon_background: "#F2EBE1" # Logonuzun krem arka plan rengi
+  adaptive_icon_foreground: "assets/icon/ic_launcher.png"
