@@ -5,7 +5,8 @@ import '../../core/theme.dart';
 import '../../core/constants.dart';
 import '../../main.dart';
 import '../components/chessboard_fixed.dart';
-import '../../services/stockfish_service.dart';
+// GÜNCELLENDİ: Hatanın sebebi burasıydı. Native yerine orijinal servisten import ediyoruz.
+import '../../services/stockfish_service.dart' show EngineVariation;
 
 class AnalysisScreen extends StatefulWidget {
   const AnalysisScreen({super.key});
@@ -19,7 +20,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
 
   bool isBuilderMode = true; 
   String selectedPiece = 'P'; 
-  bool isWhiteTurn = true; // YENİ: Hamle sırasını tutar (w/b)
+  bool isWhiteTurn = true; 
 
   late List<String> builderBoard;
 
@@ -74,7 +75,6 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     }
   }
 
-  // YENİDEN YAZILDI: Production Ready FEN Üretici
   String _generateFen() {
     String fen = '';
     for (int rank = 0; rank < 8; rank++) {
@@ -95,7 +95,6 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
       if (rank < 7) fen += '/';
     }
     
-    // w/b durumunu dinamik olarak atıyoruz
     String turn = isWhiteTurn ? 'w' : 'b';
     return '$fen $turn - - 0 1';
   }
@@ -287,11 +286,11 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
           ],
         ),
         
-        // YENİ EKLENDİ: FEN 'w' veya 'b' seçici toggle
         SwitchListTile(
           title: const Text("White to move (Beyazın Sırası)"),
           value: isWhiteTurn,
-          activeColor: AppColors.primary,
+          activeTrackColor: AppColors.primary,
+          activeThumbColor: Colors.white,
           onChanged: (val) {
             setState(() => isWhiteTurn = val);
           },

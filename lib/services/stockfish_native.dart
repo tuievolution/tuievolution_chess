@@ -1,6 +1,21 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart'; // print yerine debugPrint kullanmak için eklendi
 import 'package:stockfish/stockfish.dart';
-import 'stockfish_service.dart';
+
+// EKSİK OLAN 'depth' PARAMETRESİ EKLENDİ
+class EngineVariation {
+  final int rank;
+  final String uciMove;
+  final String score;
+  final int? depth; 
+
+  EngineVariation({
+    required this.rank,
+    required this.uciMove,
+    required this.score,
+    this.depth,
+  });
+}
 
 class StockfishPlatformService {
   Stockfish? _engine;
@@ -20,7 +35,7 @@ class StockfishPlatformService {
       _engine = Stockfish();
       
       _stdoutSub = _engine!.stdout.listen((line) {
-        print("STOCKFISH_OUT: $line"); 
+        debugPrint("STOCKFISH_OUT: $line"); // print yerine debugPrint yapıldı
 
         if (line.contains('uciok')) {
           _engine!.stdin = 'isready';
@@ -94,7 +109,7 @@ class StockfishPlatformService {
         rank: rank, 
         uciMove: pvMove, 
         score: score,
-        depth: currentDepth,
+        depth: currentDepth, // Sorun çıkartan eksik parametre
       );
       if (onEngineInfo != null) {
         final sortedVars = _currentVariations.values.toList()

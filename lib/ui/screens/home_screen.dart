@@ -6,7 +6,8 @@ import '../../main.dart';
 import '../components/chessboard_fixed.dart';
 import 'tree_screen.dart';
 import 'openings_list_screen.dart';
-import '../../services/stockfish_service.dart';
+// GÜNCELLENDİ: Çakışmayı önlemek için sadece modeli (EngineVariation) alıyoruz
+import '../../services/stockfish_service.dart' show EngineVariation;
 import 'package:chess/chess.dart' as chess_lib;
 
 class HomeScreen extends StatefulWidget {
@@ -214,7 +215,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     title: const Text('Play vs Stockfish', style: TextStyle(fontWeight: FontWeight.bold)),
                     subtitle: Text(isPlayingVsEngine ? 'Game Match Active' : 'Analysis Mode Only', style: const TextStyle(fontSize: 12)),
                     value: isPlayingVsEngine,
-                    activeColor: AppColors.primary,
+                    // GÜNCELLENDİ: Deprecated olan activeColor düzeltildi
+                    activeTrackColor: AppColors.primary,
+                    activeThumbColor: Colors.white,
                     onChanged: (val) {
                       setState(() {
                         isPlayingVsEngine = val;
